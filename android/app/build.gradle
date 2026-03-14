@@ -96,9 +96,9 @@ android {
             def storeFileProp = System.getenv('BOXSTER_UPLOAD_STORE_FILE') ?: (project.hasProperty('BOXSTER_UPLOAD_STORE_FILE') ? BOXSTER_UPLOAD_STORE_FILE : null)
             if (storeFileProp) {
                 storeFile file(storeFileProp)
-                storePassword System.getenv('BOXSTER_UPLOAD_STORE_PASSWORD') ?: BOXSTER_UPLOAD_STORE_PASSWORD
-                keyAlias System.getenv('BOXSTER_UPLOAD_KEY_ALIAS') ?: BOXSTER_UPLOAD_KEY_ALIAS
-                keyPassword System.getenv('BOXSTER_UPLOAD_KEY_PASSWORD') ?: BOXSTER_UPLOAD_KEY_PASSWORD
+                storePassword System.getenv('BOXSTER_UPLOAD_STORE_PASSWORD') ?: (project.hasProperty('BOXSTER_UPLOAD_STORE_PASSWORD') ? BOXSTER_UPLOAD_STORE_PASSWORD : null)
+                keyAlias System.getenv('BOXSTER_UPLOAD_KEY_ALIAS') ?: (project.hasProperty('BOXSTER_UPLOAD_KEY_ALIAS') ? BOXSTER_UPLOAD_KEY_ALIAS : null)
+                keyPassword System.getenv('BOXSTER_UPLOAD_KEY_PASSWORD') ?: (project.hasProperty('BOXSTER_UPLOAD_KEY_PASSWORD') ? BOXSTER_UPLOAD_KEY_PASSWORD : null)
             }
         }
     }
