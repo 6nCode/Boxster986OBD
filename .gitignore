@@ -1,0 +1,12 @@
+node_modules/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+.metro-health-check*
+.idea/
+*.orig.*
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Boxster 986 OBD</title>
+<style>
+/* ══ APPLE & PORSCHE DESIGN SYSTEM TOKENS ══ */
+:root {
+  /* Colors - Apple Dark Mode & Porsche Branding */
+  --bg-base: #000000;
+  --bg-surface: #1C1C1E;
+  --bg-surface-elevated: #2C2C2E;
+  --bg-glass: rgba(28, 28, 30, 0.75);
+  
+  --porsche-red: #D5001C;
+  --porsche-gold: #C9A84C;
+  
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(235, 235, 245, 0.6);
+  --text-tertiary: rgba(235, 235, 245, 0.3);
+  
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-highlight: rgba(255, 255, 255, 0.2);
+
+  /* Semantic Colors */
+  --system-green: #30D158;
+  --system-blue: #0A84FF;
+  --system-orange: #FF9F0A;
+  --system-red: #FF453A;
+  --system-purple: #BF5AF2;
+
+  /* Typography - iOS Native Stack */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "SF Pro Rounded", "Roboto Mono", Menlo, Courier, monospace;
+  
+  /* Geometry & Spacing */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 9999px;
+  
+  --nav-h: 84px; /* Accommodates iOS home indicator */
+  --header-h: 54px;
+  
+  --ease-spring: cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top, 0px);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ══ HEADER (Glassmorphism) ══ */
+.app-header {
+  flex: 0 0 var(--header-h);
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 0.5px solid var(--border-subtle);
+  position: relative;
+  z-index: 50;
+}
+
+.header-brand { display: flex; align-items: center; gap: 12px; }
+.porsche-crest {
+  width: 24px; height: 28px; flex-shrink: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='50' rx='48' ry='48' fill='none' stroke='%23C9A84C' stroke-width='3'/%3E%3Crect x='30' y='20' width='40' height='60' rx='2' fill='none' stroke='%23C9A84C' stroke-width='2'/%3E%3Cline x1='50' y1='20' x2='50' y2='80' stroke='%23C9A84C' stroke-width='2'/%3E%3Cline x1='30' y1='50' x2='70' y2='50' stroke='%23C9A84C' stroke-width='2'/%3E%3Crect x='30' y='20' width='20' height='30' fill='%23C9A84C' opacity='.18'/%3E%3Crect x='50' y='50' width='20' height='30' fill='%23C9A84C' opacity='.18'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.header-titles { display: flex; flex-direction: column; }
+.make { color: var(--text-primary); font-size: 15px; font-weight: 700; letter-spacing: 2px; line-height: 1.2; }
+.model-sub { color: var(--text-secondary); font-size: 11px; font-weight: 500; letter-spacing: 0.5px; }
+
+.header-right { display: flex; align-items: center; gap: 12px; }
+.conn-pill {
+  display: none; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: var(--radius-pill);
+  background: rgba(48, 209, 88, 0.15);
+}
+.conn-pill.on { display: flex; }
+.conn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--system-green); animation: blink 2s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.conn-label { color: var(--system-green); font-size: 11px; font-weight: 600; font-family: var(--font-mono); letter-spacing: 0.5px;}
+#hdr-time { color: var(--text-secondary); font-size: 13px; font-weight: 500; font-family: var(--font-mono); }
+
+/* ══ CONTENT AREA ══ */
+.content-area {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Wide layout (Tablets/Foldables) */
+@media(min-width: 768px) {
+  .content-area { display: flex; flex-direction: row; }
+  .side-rail {
+    display: flex !important;
+    flex-direction: column;
+    width: 80px; flex-shrink: 0;
+    background: var(--bg-surface);
+    border-right: 0.5px solid var(--border-subtle);
+    padding-top: 20px;
+  }
+  .side-rail .rail-item {
+    padding: 16px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer; color: var(--text-secondary); transition: all 0.2s;
+    position: relative;
+  }
+  .side-rail .rail-item.active { color: var(--text-primary); }
+  .side-rail .rail-item.active::before {
+    content: ''; position: absolute; left: 0; top: 15%; height: 70%; width: 3px;
+    background: var(--porsche-red); border-radius: 0 4px 4px 0;
+  }
+  .side-rail .rail-disc {
+    margin-top: auto; padding: 20px 0; margin-bottom: env(safe-area-inset-bottom, 20px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--system-red); border-top: 0.5px solid var(--border-subtle);
+  }
+  .screen-host { flex: 1; min-width: 0; }
+  .bottom-nav { display: none !important; }
+  .gauge-grid { grid-template-columns: repeat(3, 1fr) !important; }
+  .batt-cards { grid-template-columns: repeat(4, 1fr) !important; }
+  .blocks-grid { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* ── SCREEN HOST ── */
+.screen-host {
+  flex: 1; min-width: 0;
+  position: relative;
+  height: 100%;
+}
+
+.screen {
+  position: absolute; inset: 0;
+  overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: none;
+  scrollbar-width: none;
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+.screen::-webkit-scrollbar { display: none; }
+.screen.active { display: block; animation: fadeScreen 0.3s var(--ease-spring); }
+.screen.flex-col { display: none; flex-direction: column; }
+.screen.flex-col.active { display: flex; }
+
+@keyframes fadeScreen { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ══ BOTTOM NAV (iOS Native Style) ══ */
+.bottom-nav {
+  flex: 0 0 var(--nav-h); height: var(--nav-h);
+  display: none;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 0.5px solid var(--border-subtle);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 50;
+}
+.bottom-nav.on { display: flex; }
+.nav-item {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding-top: 8px;
+  cursor: pointer; color: var(--text-secondary);
+  transition: color 0.2s var(--ease-spring);
+}
+.nav-item:active { transform: scale(0.92); }
+.nav-item.active { color: var(--text-primary); }
+.nav-icon { width: 24px; height: 24px; stroke-width: 1.5; stroke: currentColor; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.nav-item.active .nav-icon { stroke-width: 2; color: var(--text-primary); }
+.nav-lbl { font-size: 10px; font-weight: 500; letter-spacing: 0.2px; }
+.nav-disc {
+  padding: 0 20px; cursor: pointer; color: var(--system-red);
+  display: flex; align-items: center; justify-content: center;
+  border-left: 0.5px solid var(--border-subtle);
+}
+
+/* ══ GENERIC UI COMPONENTS ══ */
+.ios-card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.ios-list-group {
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.ios-list-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--border-subtle);
+  font-size: 15px;
+}
+.ios-list-row:last-child { border-bottom: none; }
+.ios-list-row:active { background: var(--bg-surface-elevated); }
+
+.ios-btn-primary {
+  width: 100%; height: 50px;
+  background: var(--text-primary); color: var(--bg-base);
+  border: none; border-radius: var(--radius-md);
+  font-family: var(--font-sans); font-size: 16px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; transition: transform 0.2s, opacity 0.2s;
+}
+.ios-btn-primary:active { transform: scale(0.96); opacity: 0.8; }
+.ios-btn-primary.scanning { animation: pulseBtn 1.5s infinite; background: var(--bg-surface-elevated); color: var(--text-primary); }
+
+.ios-btn-destructive {
+  background: rgba(255, 69, 58, 0.15); color: var(--system-red);
+  border: 1px solid rgba(255, 69, 58, 0.3);
+}
+.ios-btn-secondary {
+  background: var(--bg-surface-elevated); color: var(--text-primary);
+}
+
+@keyframes pulseBtn { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+.section-title {
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin: 20px 0 8px 16px;
+}
+
+/* ══ SCAN SCREEN ══ */
+.scan-screen {
+  padding: 24px 20px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100%;
+}
+.car-hero-wrap {
+  position: relative; width: 100%; max-width: 380px; aspect-ratio: 2.5/1;
+  margin-bottom: 40px;
+}
+.car-glow {
+  position: absolute; inset: 0; 
+  background: radial-gradient(circle, rgba(213, 0, 28, 0.15) 0%, transparent 70%);
+  filter: blur(20px); transform: translateY(10%);
+}
+.car-photo {
+  position: absolute; inset: 0;
+  background: no-repeat center/contain;
+  filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)) grayscale(100%) brightness(1.2);
+}
+.scan-tagline { text-align: center; margin-bottom: 40px; }
+.scan-tagline h1 { font-size: 32px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+.scan-tagline p { color: var(--text-secondary); font-size: 14px; font-weight: 500; }
+
+.device-list { width: 100%; max-width: 380px; display: none; margin-top: 20px; }
+.device-list.on { display: block; animation: fadeScreen 0.3s; }
+.dn { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+.da { color: var(--text-secondary); font-size: 12px; font-family: var(--font-mono); }
+.darr { color: var(--text-secondary); }
+
+/* ══ DASHBOARD ══ */
+.dash-screen { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+
+.rpm-hero {
+  background: linear-gradient(145deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex; flex-direction: column; align-items: center;
+  position: relative; overflow: hidden;
+  border: 0.5px solid var(--border-subtle);
+}
+.rpm-hero::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--porsche-red), transparent);
+}
+.rpm-val-wrap { text-align: center; margin-bottom: 20px; }
+.rpm-num { font-size: 64px; font-weight: 700; font-family: var(--font-mono); letter-spacing: -2px; line-height: 1; }
+.rpm-lbl { color: var(--text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 2px; margin-top: 4px; }
+
+.rpm-bar-container { width: 100%; }
+.rpm-bar-track { height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; }
+.rpm-bar-fill { height: 100%; border-radius: 3px; background: var(--text-primary); transition: width 0.2s var(--ease-spring), background 0.3s; }
+.rpm-scale { display: flex; justify-content: space-between; margin-top: 8px; color: var(--text-tertiary); font-size: 10px; font-family: var(--font-mono); font-weight: 600;}
+
+.gauge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.g-card {
+  background: var(--bg-surface); border-radius: var(--radius-md);
+  padding: 16px; position: relative;
+  border: 0.5px solid var(--border-subtle);
+}
+.g-card.warn { border-color: rgba(255, 159, 10, 0.4); }
+.g-card.danger { border-color: rgba(255, 69, 58, 0.5); }
+.g-lbl { color: var(--text-secondary); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.g-val-wrap { display: flex; align-items: baseline; gap: 4px; margin: 8px 0 12px; }
+.g-val { font-size: 28px; font-weight: 700; font-family: var(--font-mono); letter-spacing: -1px; }
+.g-unit { color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+.g-bar { height: 4px; background: var(--bg-base); border-radius: 2px; overflow: hidden; }
+.g-bar-fill { height: 100%; border-radius: 2px; background: var(--text-primary); transition: width 0.3s; }
+
+/* ══ BATTERY ══ */
+.batt-screen { padding: 16px; }
+.batt-hero {
+  background: var(--bg-surface); border-radius: var(--radius-lg);
+  padding: 24px; display: flex; justify-content: space-between; align-items: center;
+  border: 0.5px solid var(--border-subtle); margin-bottom: 24px;
+}
+.bh-info { display: flex; flex-direction: column; }
+.bh-lbl { color: var(--text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 1px; }
+.bh-volt { font-size: 48px; font-weight: 700; font-family: var(--font-mono); letter-spacing: -1px; line-height: 1.1; margin-top: 4px; }
+.bh-unit { color: var(--text-secondary); font-size: 14px; font-weight: 500; }
+
+.batt-icon-large { width: 60px; height: 30px; position: relative; border: 2px solid var(--border-highlight); border-radius: 6px; padding: 2px; }
+.batt-icon-large::after { content: ''; position: absolute; right: -6px; top: 6px; width: 4px; height: 14px; background: var(--border-highlight); border-radius: 0 2px 2px 0; }
+.batt-fill-level { height: 100%; background: var(--system-green); border-radius: 3px; transition: all 0.5s var(--ease-spring); }
+
+.batt-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+.bm-card { background: var(--bg-surface); padding: 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; }
+.bm-val { font-size: 24px; font-weight: 700; font-family: var(--font-mono); margin: 4px 0; }
+.bm-hint { color: var(--text-tertiary); font-size: 10px; font-weight: 500; }
+
+/* ══ MEASURING BLOCKS & DTC (Grouped Lists) ══ */
+.blocks-inner, .dtc-inner { display: flex; flex-direction: column; height: 100%; }
+
+.segment-scroll {
+  display: flex; overflow-x: auto; gap: 8px; padding: 16px; 
+  background: var(--bg-base); scrollbar-width: none; flex-shrink: 0;
+}
+.segment-scroll::-webkit-scrollbar { display: none; }
+.segment-tab {
+  padding: 8px 16px; border-radius: var(--radius-pill);
+  background: var(--bg-surface); color: var(--text-secondary);
+  font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: all 0.2s; border: 0.5px solid transparent;
+}
+.segment-tab.active {
+  background: var(--text-primary); color: var(--bg-base);
+}
+
+.kwp-status-bar {
+  padding: 8px 16px; background: var(--bg-surface-elevated);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+  display: flex; justify-content: space-between; border-bottom: 0.5px solid var(--border-subtle);
+}
+
+.scrollable-content { flex: 1; overflow-y: auto; padding: 16px; }
+
+.blocks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.blk-card {
+  background: var(--bg-surface); padding: 16px; border-radius: var(--radius-md);
+  border: 0.5px solid var(--border-subtle); animation: fadeScreen 0.2s ease-out;
+}
+.blk-val { font-size: 24px; font-weight: 700; font-family: var(--font-mono); margin: 6px 0 2px; }
+
+/* ══ EXCEEDED VALUES ══ */
+.exc-screen { padding: 16px; }
+.exc-card {
+  background: var(--bg-surface); border-radius: var(--radius-md);
+  padding: 16px; margin-bottom: 12px; border: 0.5px solid var(--border-subtle);
+}
+.exc-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.exc-title { font-size: 14px; font-weight: 600; }
+.exc-track { height: 6px; background: var(--bg-base); border-radius: 3px; position: relative; margin-top: 12px; }
+.exc-bar-cur { position: absolute; top: 0; left: 0; height: 100%; background: var(--bg-surface-elevated); border-radius: 3px; }
+.exc-pin { position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 1.5px; }
+
+/* ══ DTC ══ */
+.mbadge { 
+  display: inline-flex; align-items: center; justify-content: center; 
+  padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 700;
+  background: var(--system-red); color: white; margin-left: 6px;
+}
+.mbadge.ok { background: var(--bg-surface-elevated); color: var(--text-secondary); }
+
+.dtc-item {
+  background: var(--bg-surface); border-radius: var(--radius-md);
+  padding: 16px; margin-bottom: 12px; border: 0.5px solid var(--border-subtle);
+  cursor: pointer;
+}
+.dtc-item-hdr { display: flex; justify-content: space-between; align-items: center; }
+.dtc-code { font-size: 18px; font-weight: 700; font-family: var(--font-mono); }
+.dtc-tag { font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
+.dtc-tag.g { background: rgba(255, 159, 10, 0.15); color: var(--system-orange); }
+.dtc-tag.p { background: rgba(213, 0, 28, 0.15); color: var(--porsche-red); }
+.dtc-desc { font-size: 14px; margin-top: 8px; color: var(--text-primary); line-height: 1.4; }
+.dtc-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 0.5px solid var(--border-subtle); }
+.dtc-cause { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin-bottom: 4px; display: flex; gap: 8px; }
+.dtc-cause::before { content: '•'; color: var(--porsche-red); }
+
+.action-row { display: flex; gap: 12px; margin-bottom: 16px; padding: 0 16px; }
+.action-row button { flex: 1; height: 44px; }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="app-header">
+  <div class="header-brand">
+    <div class="porsche-crest"></div>
+    <div class="header-titles">
+      <span class="make">PORSCHE</span>
+      <span class="model-sub">BOXSTER 986</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="conn-pill" id="conn-pill"><div class="conn-dot"></div><span class="conn-label" id="conn-label">CONNECTED</span></div>
+    <span id="hdr-time"></span>
+  </div>
+</header>
+
+<!-- CONTENT AREA -->
+<div class="content-area" id="content-area">
+
+  <!-- SIDE RAIL (Tablets/Web) -->
+  <nav class="side-rail" id="side-rail" style="display:none;">
+    <div class="rail-item active" id="sr-dash" onclick="go('dash')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 14l4-4"/><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+      <span class="nav-lbl">LIVE</span>
+    </div>
+    <div class="rail-item" id="sr-battery" onclick="go('battery')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/></svg>
+      <span class="nav-lbl">BATT</span>
+    </div>
+    <div class="rail-item" id="sr-blocks" onclick="go('blocks')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+      <span class="nav-lbl">DATA</span>
+    </div>
+    <div class="rail-item" id="sr-exceeded" onclick="go('exceeded')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span class="nav-lbl">MAX</span>
+    </div>
+    <div class="rail-item" id="sr-dtc" onclick="go('dtc')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <span class="nav-lbl">DTC</span>
+    </div>
+    <div class="rail-disc" onclick="disconnect()">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </div>
+  </nav>
+
+  <!-- SCREEN HOST -->
+  <div class="screen-host" id="screen-host">
+
+    <!-- ── SCAN ── -->
+    <div class="screen active" id="screen-scan">
+      <div class="scan-screen">
+        <div class="car-hero-wrap">
+          <div class="car-glow"></div>
+          <div class="car-photo" id="car-photo"></div>
+        </div>
+        <div class="scan-tagline">
+          <h1>Diagnostic System</h1>
+          <p>Connect to Vgate iCar Pro via Bluetooth</p>
+        </div>
+        
+        <button class="ios-btn-primary" id="scan-btn" onclick="startScan()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Rechercher Appareils
+        </button>
+
+        <div class="device-list" id="device-list">
+          <div class="section-title">Appareils Détectés</div>
+          <div class="ios-list-group">
+            <div class="ios-list-row" onclick="connectDevice()">
+              <div>
+                <div class="dn">Vgate iCar Pro</div>
+                <div class="da">00:1D:A5:23:8B:FC</div>
+              </div>
+              <div class="darr" id="darr">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DASHBOARD ── -->
+    <div class="screen" id="screen-dash">
+      <div class="dash-screen">
+        <div class="rpm-hero">
+          <div class="rpm-val-wrap">
+            <div class="rpm-num" id="val-rpm">0</div>
+            <div class="rpm-lbl">TR/MIN</div>
+          </div>
+          <div class="rpm-bar-container">
+            <div class="rpm-bar-track">
+              <div class="rpm-bar-fill" id="bar-rpm" style="width:0%;"></div>
+            </div>
+            <div class="rpm-scale"><span>0</span><span>2k</span><span>4k</span><span>6k</span><span>8k</span></div>
+          </div>
+        </div>
+        
+        <div class="gauge-grid">
+          <div class="g-card" id="gc-speed">
+            <div class="g-lbl">Vitesse</div>
+            <div class="g-val-wrap"><div class="g-val" id="val-speed">0</div><div class="g-unit">km/h</div></div>
+            <div class="g-bar"><div class="g-bar-fill" id="bar-speed" style="width:0%"></div></div>
+          </div>
+          <div class="g-card" id="gc-coolant">
+            <div class="g-lbl">Temp. Eau</div>
+            <div class="g-val-wrap"><div class="g-val" id="val-coolant">--</div><div class="g-unit">°C</div></div>
+            <div class="g-bar"><div class="g-bar-fill" id="bar-coolant" style="width:0%"></div></div>
+          </div>
+          <div class="g-card" id="gc-oil">
+            <div class="g-lbl">Temp. Huile</div>
+            <div class="g-val-wrap"><div class="g-val" id="val-oil">--</div><div class="g-unit">°C</div></div>
+            <div class="g-bar"><div class="g-bar-fill" id="bar-oil" style="width:0%"></div></div>
+          </div>
+          <div class="g-card" id="gc-load">
+            <div class="g-lbl">Charge Mot.</div>
+            <div class="g-val-wrap"><div class="g-val" id="val-load">--</div><div class="g-unit">%</div></div>
+            <div class="g-bar"><div class="g-bar-fill" id="bar-load" style="width:0%"></div></div>
+          </div>
+          <div class="g-card" id="gc-map">
+            <div class="g-lbl">Press. MAP</div>
+            <div class="g-val-wrap"><div class="g-val" id="val-map">--</div><div class="g-unit">kPa</div></div>
+            <div class="g-bar"><div class="g-bar-fill" id="bar-map" style="width:0%"></div></div>
+          </div>
+          <div class="g-card" id="gc-thr">
+            <div class="g-lbl">Papillon</div>
+            <div class="g-val-wrap"><div class="g-val" id="val-thr">--</div><div class="g-unit">%</div></div>
+            <div class="g-bar"><div class="g-bar-fill" id="bar-thr" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BATTERY ── -->
+    <div class="screen" id="screen-battery">
+      <div class="batt-screen">
+        <div class="batt-hero">
+          <div class="bh-info">
+            <div class="bh-lbl">TENSION SYSTÈME</div>
+            <div class="bh-volt" id="bh-volt">--</div>
+            <div class="bh-unit">Volts</div>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div class="batt-icon-large">
+              <div class="batt-fill-level" id="batt-fill" style="width: 0%;"></div>
+            </div>
+            <div style="font-weight: 600; font-size: 14px;" id="soc-lbl">--%</div>
+          </div>
+        </div>
+        
+        <div class="batt-cards">
+          <div class="bm-card">
+            <div class="g-lbl">Tension Min</div>
+            <div class="bm-val" id="bm-min">--</div>
+            <div class="bm-hint">Démarrage</div>
+          </div>
+          <div class="bm-card">
+            <div class="g-lbl">Tension Max</div>
+            <div class="bm-val" id="bm-max">--</div>
+            <div class="bm-hint">Alternateur</div>
+          </div>
+          <div class="bm-card">
+            <div class="g-lbl">Chute Démarr.</div>
+            <div class="bm-val" id="bm-drop">--</div>
+            <div class="bm-hint">&lt; 2.0V = OK</div>
+          </div>
+          <div class="bm-card">
+            <div class="g-lbl">Santé Est.</div>
+            <div class="bm-val" id="bm-health">--</div>
+            <div class="bm-hint">% Capacité</div>
+          </div>
+        </div>
+
+        <div class="section-title">Diagnostic Alternateur</div>
+        <div class="ios-card">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+            <span style="color: var(--text-secondary); font-size: 13px;">Tension de charge</span>
+            <span style="font-weight: 600;" id="alt-v">-- V</span>
+          </div>
+          <div class="exc-track" style="margin-top: 0;">
+            <div class="exc-bar-cur" id="alt-fill" style="width:0%; background: var(--system-green)"></div>
+          </div>
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 12px; text-align: center;" id="alt-status">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MEASURING BLOCKS ── -->
+    <div class="screen flex-col" id="screen-blocks">
+      <div class="blocks-inner">
+        <div class="segment-scroll">
+          <div class="segment-tab active" onclick="selGrp(1)" id="gt-1">Grp 001</div>
+          <div class="segment-tab" onclick="selGrp(2)" id="gt-2">Grp 002</div>
+          <div class="segment-tab" onclick="selGrp(3)" id="gt-3">Grp 003</div>
+          <div class="segment-tab" onclick="selGrp(4)" id="gt-4">Grp 004</div>
+          <div class="segment-tab" onclick="selGrp(10)" id="gt-10">Grp 010</div>
+          <div class="segment-tab" onclick="selGrp(16)" id="gt-16">Grp 016</div>
+          <div class="segment-tab" onclick="selGrp(32)" id="gt-32">Grp 032</div>
+        </div>
+        <div class="kwp-status-bar">
+          <span id="kwp-cmd">21 01</span>
+          <span id="kwp-resp" style="color: var(--system-green)">← 61 01</span>
+        </div>
+        <div class="scrollable-content">
+          <div style="margin-bottom: 20px;">
+            <h2 style="font-size: 18px; margin-bottom: 4px;" id="grp-title">Groupe 001</h2>
+            <p style="color: var(--text-secondary); font-size: 13px;" id="grp-desc">Desc</p>
+          </div>
+          <div class="blocks-grid" id="blocks-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── EXCEEDED VALUES ── -->
+    <div class="screen" id="screen-exceeded">
+      <div class="exc-screen">
+        <div style="margin-bottom: 24px;">
+          <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">Plages Max / Min</h2>
+          <p style="color: var(--text-secondary); font-size: 14px;">Valeurs extrêmes enregistrées dans l'ECU (SID 23).</p>
+          <p style="color: var(--text-tertiary); font-size: 12px; margin-top: 6px;">Dernier effacement : <span id="exc-clear-date">Jamais</span></p>
+        </div>
+        
+        <div class="action-row" style="padding: 0; margin-bottom: 24px;">
+          <button class="ios-btn-primary ios-btn-secondary" onclick="refreshExc()">Rafraîchir</button>
+          <button class="ios-btn-primary ios-btn-destructive" onclick="resetExc()">Effacer</button>
+        </div>
+
+        <div id="exc-list"></div>
+      </div>
+    </div>
+
+    <!-- ── DTC ── -->
+    <div class="screen flex-col" id="screen-dtc">
+      <div class="dtc-inner">
+        <div class="segment-scroll">
+          <div class="segment-tab active" onclick="selMod('dme')" id="mt-dme">DME <span class="mbadge" id="mb-dme">2</span></div>
+          <div class="segment-tab" onclick="selMod('abs')" id="mt-abs">ABS <span class="mbadge ok" id="mb-abs">0</span></div>
+          <div class="segment-tab" onclick="selMod('airbag')" id="mt-airbag">SRS <span class="mbadge ok" id="mb-airbag">0</span></div>
+          <div class="segment-tab" onclick="selMod('clim')" id="mt-clim">Clim <span class="mbadge" id="mb-clim">1</span></div>
+        </div>
+        
+        <div class="scrollable-content">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <div>
+              <h2 style="font-size: 20px; font-weight: 700;" id="dtc-mod-t">DME – Moteur</h2>
+              <p style="color: var(--text-secondary); font-size: 12px; font-family: var(--font-mono); margin-top: 4px;" id="dtc-mod-a">Addr: 0x01</p>
+              <p style="color: var(--text-tertiary); font-size: 11px; margin-top: 3px;">Effacement : <span id="dtc-clear-date">Jamais</span></p>
+            </div>
+          </div>
+          
+          <div class="action-row" style="padding: 0;">
+            <button class="ios-btn-primary ios-btn-secondary" onclick="rescanMod()">Scanner</button>
+            <button class="ios-btn-primary ios-btn-destructive" onclick="clearDTC()">Effacer</button>
+          </div>
+
+          <div id="dtc-list" style="margin-top: 24px;"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /screen-host -->
+</div><!-- /content-area -->
+
+<!-- BOTTOM NAV (Mobile) -->
+<nav class="bottom-nav" id="bottom-nav">
+  <div class="nav-item active" id="bn-dash" onclick="go('dash')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 14l4-4"/><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+    <span class="nav-lbl">Live</span>
+  </div>
+  <div class="nav-item" id="bn-battery" onclick="go('battery')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/></svg>
+    <span class="nav-lbl">Batterie</span>
+  </div>
+  <div class="nav-item" id="bn-blocks" onclick="go('blocks')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+    <span class="nav-lbl">Données</span>
+  </div>
+  <div class="nav-item" id="bn-exceeded" onclick="go('exceeded')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span class="nav-lbl">Plages</span>
+  </div>
+  <div class="nav-item" id="bn-dtc" onclick="go('dtc')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    <span class="nav-lbl">DTC</span>
+  </div>
+</nav>
+
+<script>
+// ══ CAR IMAGE ══
+const CAR_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCACNAdoDASIAAhEBAxEB/8QAHQABAAEEAwEAAAAAAAAAAAAAAAYFBwgJAgMEAf/EAGQQAAEDAwEEBAcGDgwJCgcAAAIDBAUAAQYSBxETIhQhMkIIIzFSYnKCFRYzQZLSFyRDUVNWV2FxgYOUorI0Y3ORlZajscLD0dMlNUVGVJOhs8EYJjZVZHSEhdTiOGWktMTh8P/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwDDKlKUClKUClKUClKUClKUClKUClKUClKUClKUClK7WoCo5TFTfouVte74h+P/AGUFYw7Esiy5+TLHoh9IqhbedmzVRbRb65WTEr2t9/dXbmOHy2LoRrp/wlGkmiSzRdK99J2E7gY3sVrEJCYkNxK1r2vatk2wLHI/GMOTaNGTVmo3Zsmy5IoiFzMGyahkd7doiUWULVfzqsh4PmMM9rj93KZWisvjka8kDiY1FYkUxu4ckpdQ7gQnctRqDbf2dFBhNSsrfCc2P49j0i9Vx+MVSZOETTbalyVWQfpI2cXtczK5XSNvr3WK972JPq8tYpUClKUClKUCpay2cZq7j279LHZLo7lCzlufRVL2WTvv3EF7DfVv3X6rdf3qi7Xg9JT6RdSyOq2u4WtcrW+O9t/x1mXhG3HHigEIpBjGpNW6KaZJssgQbt7XtbdvFvJANg3fWTudvv0GMWI7NMoySXcxqDdJkTJEnD9V6V0xZJ2vu1K23XIb3vutYdNzLfbSN99XHU8GrJUhio4VVHmTvUidLQqAiJNW9rbrKGsV7CJb919F7W7Qjq1XrI2EzDHHez2NyCOb+6LhjkFzmmyrhIFW6VlFDSuqQ7wskKlmxgdr8PlT5hHszQ1je5R9EjBytMcZgDKXjOoHQjv1ComJdlUe8mWkSHslq7Qa4MrxWbxqWdRsrHuWzhte/FTWSuCgDvtbUQ/Fbfe1tVt43v5CvVDrZxBp7O9ouJIY1PRaLl02uQKIPQuDoHHaVUTU+EFTVqLq0qecI1YXbJ4IT5vx5TZ86vIo28kevcU3AWtbul1Ap5PJfQXXe97legxBpVYyDGZyBduGsrGuGqzYtK4KJ3E0r9VraxvaxDvvfda97W3/ABb6o9ApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSlApSu9q0dOlxQbt1VVT7IgN73vQdFKlyezTPyjClFMPnUGI3HU5Wj1QTtYvIWq47tP3/JVElYN/GgBr2RKx3va1gVG52vbzk+2HtDbfQUyldyTZdS+4U7/j6v567V452iOpQAtb49yo3/mvQeSpzseiEJaWdpK38YqLdkj1dW9y4Tblf5Ch1CbpKWva1wLr8nVVw9hLV5bNIdxwVwblNR43VuN7J3uK4qab36rXvuC992/4r0Gx7pIM8SzB2PL0dR6p6ulP/wBtW/8AAri0WWxaPcppEmTgR1ai1avqmr5ShVMM1IkNnG0sRPxibV6oPo6mQl/Srw+CzZIdg2KkmSZamQ6tJdnu/wBGgivhDshkYAEiPQS2ZoI2L63EYEgV/kmVa53AcJwona+/QVx3/gvWxbwinRMoVPQVuKnl4uBt95OLUX/nCtdCx3UWNS/lIr3v+Og4UpSgUpSgUpSglmDZzI4uumSaNlwC/IqmqSDpAd/XZJcOYbX6+UrGnvvvuF71eDZ/tWdg8RfwS5k+SGw9ESJNs63dW8QDqTWHffdYA6j3Xv0cb89Y50oNgmOZphe1BIV5N4nCZAgAo+6rdPh3EtXKm6RP4Pm7pah+xqCVTpjlmTYa8Ti80a9IbKKcNvIAp4tbzdKhd79rU0l5pKVi/wCDPsq2jSTIM7XiGkpEv2ijZqDuVJs70hfcKiR2E9FrENx0nbSQ3K1xIb9d2I/L8o2ekrjmf4k6DGHHiRF8KazNQS5dIrDqTRIvsamlMu7wezQXizDDcD2pwu6Xj0XpJ2umm6TtdJ23K/Ve2q3OF91+sC9oaxJ20eCjPwFlpPFCUnGG/Ve6CO5dG2/ruaIWvrt1+VK2/q3WSv5ayLiotayPu/s5fOXjNG901o0ldLxn+1pkp2hH7Cty/YyEdNS/D8/ZSQEnJ3FqqmpwVFriSYpqfY1ky5m6nolyl3SKg1ZysPIRtrG5QvwbnoFYL6kyLdvuOq3kK1r23jfcVvjtaqfW0Ha/sRw7aKius4b3jJdUet+1AbXVvu5bLh5FrW+LV127pDWFO2DwesswJVZddMTj+JpReh+xCtfyWJQr70S+8pbRu+qXv1UFlKV6ZJi8jXhs37VVs4DtJqDcb2//AF9+vNQKUpQKUpQKUpQKUpQKUpQKUpQKUpQKUpQKUpQKUpQKUpQKUpQKV9tbf5KnmzjZJmeePE0IdsybiZbrKP3qbfq+uIFfWdvUEqCBUrMTEPAlckAK5bmqSZXtzIRjUj6/vKKab/vharu4r4KWx6DETcRL+bVHyHIvCvb8Yp6Bv+O1BrnZsXbtayLZuaqt7b7Ba3Xe33rfHU2gNkWYyt0iUCJikFPqsnLNmun8IKHY/wB4a2TQmy/Z3ChpjcHx5tfzhj0yL5RDUiZxMUytvZxbJt+4thH9Wg19Y74OUUooPvk2sY00Hf1jGJqvb/v7gtb8V71L32wvY7EwpOGeVTk7LJEKlm3QlujuBE+ZO/CQI0rKDa42Ute+i/N1+Ss5qUGL+ERvg1RkUg8PZ7IMlr9tvLY9IO1Ey9LUBgXs1cmH2qbIIhIUIkijE/saOOum4j/IjV16UFu/o0bLb20nmDBO5d1cVE/1hqGzzbwfMntc/d/HGSypbyJBymjq/Jl4v2tNXzVSTU+ETTL1hqmL45AOOZ1BRa97/ZGiZf0aC0kfHSUWgI4VtghHCPZTbvFEVB+VzfoiNVgJ7as03dLw6ByNvbtKMHogRfK+bUrf7Ntn73eTnB8dMitzF7nJiXyhGqSpsU2YKXK4Ym2bEXaJq4Wbl/JkNBSS2hoIJkWTbK8kY2t1EoMYLhP5VqtFISuzGdlMhzHJdUPKsxUTxtmmwJuq3FPmFTlHSSihed2R5fSq94bIscQ3Wi5jMInR2RZ5E6EbeyShfpV8PZe/4RJpbTM1IC8qbxZu6H+URoLN7Q9qyhYdlCzOfxOUTlopYJFBqqSYNyujwRFFYi8cXMPdES5dPe01XZfl0Bh+yrAyZyrRKbfQqZLMlOJodJiWnURDyioJFpEi06uzq7Omdo7HcAh3TnLMpVVnFmqBqKOJfhk3bpiJai4Ipinyjq7QlpqkstkeJ5yujOS+DwsDBCXFYxjVgmg6dD3VHSg9YiXa4I6f2wi7IhEdv8jqeRFn8tFKs5NvJyCS6SvCtxko5RtZHcZb7mV1wvbdpvykOmsFE42RUtvTj3Z29FEr/wDCtop7ENkx20lgUOWktXwZV1lsG2PlzFgESXsl86g1hWhJm46rRD+9vr9GP+yuy2Pz9x1Wg5O4/X6Ie7+atmpeD/scItRYHGkXpEp86vMp4OmxUy1HgTHV6LhYf6yg1rBjOSH2Mfli/AzUv/wr1J4Rmit9yeIZAd/RjVr/ANGtjh+DdsTL/MNoP4HLj+8rgXg2bFr9nCEBLzhdr/3lBrrts/zy9+rCck/gtb5tcHOCZu2vucYdkKW/ya41a2/9Gtiv/Jp2L/aiP52t86uv/kybHPtcX/P1vnUGtZ5HSDI9Dxg6bF9ZVEgv/ttXtxqAkpyej4poxdLKPHAJBZNK9731XtbqrYqXgwbIisQ+4z0RLui/U6q6reC1si3b7RUmP/mKhfrUEm8HCQZP9iOJgxJOxM45Ji4THqJNdEeGoJelqEv1qke0J00bYu6RkIeVlmr5MmqraObksqQmJauUf1qg0F4PmEY8apY3I5ZBmt8KUfNLI8T1tPa9qvU82HY+/PW/yvO3t+0NnOQLKCPslQWgxjFcmw6UxdPCn8qg8focE4mTaLIkgSaJKEKbhRPhqJ8vwamoRIvFkPaG5EbMQOdyPQ5kF8WzVqBNRcBbhker6iQlyqCXa4KmoS7SesfGVXoPY7Cwshd/FZFkjd3wyTst0pNQhEu1p1J8urSPZ82uOU7H43JDRVmMqydwq3HSkoJtQUEfN1CjqIe9pLVzc3aoPG2msgwV0lHzyDZJjc7pt19ZCxW+8moXM1U6/g1NSZdQpqD2anC2SxKiCraRavW5XEhUbOmCnN8kSEh9XVUCn9n2WMhubXMcjyiNsjwVox/Ipt1iDs8qgp6VCLzVB5vOGu3BcXxaRiSioTIs2Y+5/i3EW4mXCLhl3hEh1arD5pDqEu6RDQW82t7DMQyNv0rDot+le2sxiFI9yDIyvv8AgVNNrtb3vffy709+7WF91Y95lsabtlTbROPZXFLx6YHLhKroLGkSl0xEW4oj9MiN1BK5juvcerTYuqs5Vdk+PLlqcTGYr+ipk74h/wB5Xkb7FMBQcqO0mMkLpTtL3k3BKF7RFQay1cWyEHSjcId8qQFe17ptzvb8Pk32/HurmtiGUINbu14CRRbWtv46iBCn8q/Vf9+tkWQQbKJk2uPY8OSSUs6SusKNsjdN27dES0kosoJ8o6i06REiLujykQr7MMmeD9N5s7ZCQ8yLV2+WEfaWdFq+SNBrJuyeWRJboq/CHtHw76bfj8leetkb7wfIhwvdy6ODmHHnS0QS2r2hWEv1qpsNsW2YyE24xvKNnzZnKJt+lIEwkndmrtDVaxEnbXbhkJEIkmXZ1DzEJUGu6lbJ3PgqbFHHkxt0j+5yK/8AxK9USQ8D3ZM6tvRXyNnu+JF2lf8AXSvQa86VnNIeBRiZWvaNzCWRuVuq7tqC17fiEk/5qh8x4EuQICoUVmUY+3W5bOETa2/ftxKDEmlX2yHwUdsEUkRt4VtLbr+Vi8SuO78oQF+jVtMn2c5zjRlabxaXYpjbfdZwzUSS/EZja1/xXoIpSuw0VgTFQ0jEC6hK43ta/wCC9ddApSlApSlApSlApSlApSsith3g6PpzGm+dZc/tDsFVEiimBs+OrI3uVrhvDVbxZ922/edt9+Uea4WVxLCstyy63vbx2UlRR+FNq1NQU/Wva26346vLgexXCQTSLJM2jJuZWveycPFSCaKba435ieOFLX4IW6t46dd777DYr9VrxxcC8zBwpDZLtOZY/ikeoTco2LcN4/jEmWkk000+ymJCQ6i1atPLy81XnxVbY9ikKjDQklh7Foha2lMXqBFf0iIi1EXpFQW02f7JNguGRi0jMvMWmXejjKquHgqoID5qQEZX0+kWoi/Rq1e1DaDHSGVNxwCHs0gU/FkmslxunKei3LUOnzdI6v1ayyLLtlNtRFk2F+kXT2vzqsjtB2tYvJkLJvAt2yKMimooaM0xEXyKanMmoIkREmonq5R9HVy0HZssyHKm+HOp9VvKwDRiWpRVrpdR3D9Juspq1au61IfN0iXLVyoHaqgL91H5DGrD0MRJ1KxKCzlglq5tK3LxG6nnJmPL3iqhREBlG0h03kJXjY/jSHMybogSKmnu9HHlJPl+rKCKn2MUx5iu7j8VGwkY3i4hkg0Zt7aU0UQ0iP8A/ed3qD0Rb9lKMU30c8bvWqo6k1m6oqJl6pDXtqDT2GRzdVzOQEieKSPwizprpFsr6SyJeLU9blL0hqLyW1SRgI9NbKGbKMj1Fboo5GVlOgrebpR+GEi/1fmqFQXhryPX8e0t9OPm7b92VEf1qsu7yvIZ1ko+i4CWexwjzS2SPfcGNH0hRHxyg/ug+1UR99TbjqJ/RTw9k4T5jb4jiBSRCI9ouMXE1etpoMjRyKBLszUaXqu0/nV7266C6fERUTUHzhLVWNK2Ut7piK217NUdSXGEnGz8eCSf2T9h9n0q9WPvnMo4AcVz/Znlzq58rVwwKIfeyoipq1fk6DJGlWTHPpHG3KTTLEJTEFlC0plMkL6KVLuiL5PmTL900+rVyI3J0Vl0Wkg3Jg7X+A1HxEXP7ioPKpy82nlL0aCSUpSgUryvXrFrYRePG6Fy7NlVBHV8quHunHF2ZBp/rhoIxtbEVYGMarDa7RzOR6Lq1+ySZOB5S9Ei0j7VVDKMvx3G+GM1Ji2UUElBSsJGoQj2i0jzaR87s1yzeMTyfD5OHbuUrOHDcujKWL4NYeZM/ZUES9mrKbUZabcs4LNY1VuyiZqFNnMmtp4bRZPiEmK1iTLUnxFHAkny8QhEdWrTQXCX26bKECuDjL2yBD2hUbrDp/RqvQO0fAZ1xwYjMoN2tv08FN6nxPk79VWPwnL8XLFGSXvgUTW4ZFbVl7VumI6tQiKKihEmIjpHSQ6h7JVTcpkdkT5duhl6qUuior8GxmWrxYfS+l0xU0+qVBlfSrL+Ds0lkH04owbT7LCFCT9xGkyoRLAX1Qk9XMKfol7Peq9FApSlApSlApSlApSlApSlAqHZ7BLOwDI4MbpZLFJkoyU3fsge0TRTzk1Oz6JaSHmGpjSgpWNy7acgI+aZ67NnzcF0tXa0kNi6/v1VaheycRbQ8rEiFhTjZt6gmPmgSxLD+ioNTSgheVRMynkDXLMcBFw9Rbk0dx6ynDs8b6tQ6VO6oJaiHVylqIS09ofo7QoxAf8ADEVkcOoPlTcQ6yn8oiKiZeyVTKqdLSTGMa3dPnNkA36R1deouvSIj3i6uyPNQR0toUSsH+CozIZhXVusm1iHA/yigimPtENfMWjp17kq2V5G3TYL9Fu0YRya3Es1RIhJQlFOySpEI9nlERERIuYq8uU5YcXDlKzUqyxCItfcLiQ0m6U9VPsiXo8xeiNQObzO67P3SaYjIvI7V/jjM5cYlkXpCiXMQ/kRoL3uZGPbFpcPmyZftiojRKRjl+VJ+0UvfzVhKsZx2iuVbL9GmNnSabceIp7jYlJSwpj53EDSOnlLm5ezXc6zaWaEuL2SxjxaYrKe6mzaUbiKZd4iEi0iWkuYvNoMnqVjli+ZSEgpf3IhcTn1O+OIZQTV0n/4Vbh/JIqmWObSEl5QYQZBdCWO3LB5O19z35/uanwa3s6vWoLt0qixE80fuFGZCbR+l1qNHA6VA9L0h9IdQ+lVaoLRbXtjON5eolMsoWORmW1jG9x1NxeJnbnSVNG2sfOFQdRCXdIdQlihlvg+qvHT5LGOkFItSuSkOsApyCQadW7TvsmuQjv3aLhcxtrHXctI7DKhee4NH5e2RcmsvHTDXmYSjXlXblv1e0Orul+iXNQas8ixyUgl1AeIXuCal0iUEStYTt3DErWJM/ROwl96qRWwXLIXHsrkAxLbNEJROSqhZCNyZlyISIb7XtbXuva5fHwVdQ9VWE2g+DNOY7JEyKRYGSp3Fi6vfoqDu979QazvwgW+KyRGna/duVBjrSpVmOz/ACvE3/QZyHdsl9+4U10rpkd9+7cG/qU/Cnc7ffqMLpKoLGismaSoFcTAxvYhvby2va/kvQcKUpQKUpQXz8DXZaw2jbRVXc6jx4ODAHLpC9t4rqEW5JIvRvcSve3x2DT3q2LvI+PeNhbO2LZyiF9QpqpCQj+Iq14eBZlUrBbUo2PZPlEGsk+SavkNdrJuUiTW02va/eE7jcb2va/Ne3Xv3VscoI7fBsLJW65Yhj5LF2lCjUdX6tdvvMxD7VIL+Dkfm1XaUFI97GN/a7Efmafza72sNENVBVaxTJFQeyabcRIf9lVClAqnS8i0jGJOnVy0atIpjbUShF2REe8RebXuMhTG5EQiI94qtRm+TP2zNpNxrRN3PS6/QMRj1OyJEPM6U9HhiShF3Ux08pEVB5MunZp/kaOPR7BtL5VoFwEWopvj4VIuoXDwx+EU81Me13R+qVb13JNWuSIrY+amdZfdwTRbK5Bv0huzX06iRj2o9oh/a9KaeoeIpXpyBB1qPZTiLiReOHqygZLPo20rSckSeokSU+ppiJCSxDq4aelEeYtNTSAisexKBeTKki2iohFMU5GcTTFuT4R5RRaiPwLcdIiIp8xaeUiLxhBFGWzx5NTCDvPpZ3PTaIkKrPSnIKBqLl8WX0qzLSPZES7ReMKpuhgccxYJdKhWDds3Q6KkpNTKzghR8zhj4sR5R5RLu1CJ7PZpVqLKCQc4dCXunZFs0RTKTW4xiKaixH4toKhEPMp4wtWrmqNXh1JVmwlU8eBZZ6/FmbycbrSBJrFqT4fEWUT4igrDpIU0SHlLm00F2EcZxBcrIsUtnqx8Lg8Nvcky0+bqFTs1Tsx2XRcq2WSkYWRRsTYW6bhBUZhFEe7pTcDxE9OrVqT0l6VReIwWRnMaj5McKi3bd80ScDwWEeWkSHV2R4Jah1dniV52Scxi0km2hnk1jT5QtSbMRUJNbzvpNwRCoP8A3dZQvNGg9R+/XBWLlzEu2+S4kpw0Sj3SpOmekuUhJZTUsz7QlpU4iY82ohr0Y8o0tHSC2zpgu9i2am7Itn7s/HsS7XFY83iy7wiJcNT6mQlUhxXN0J+WaNJy7XHskeak4+XYlxI+W09pAtXeHskippUHukJVHc7xZ7AvPfNjIFAycECqxsWiY8NvxC1cYe8owUIS4ifLw9REOkhISC6eB5Q1k42OUCRKRh5H/FkgfUrrHtN3HmrDpIebtaSEubtT+scGsuzbLL5j0NWLhpZ8MdnUQKv+JZLlFN8mXk06uHqUHlISTU86r5YxIOHbNVq/sPukyX6O6079JF2hUH0SEhL8emgxzlIDGV9reRt9pzJ+pZM1nQvAAlPEEpqRU5RIhRFPSny6RTUTLVzEJV6lse8GVW/VOWEk+zyFy/KTq8W1XZ+3zOKEm6ibSZZip0J0oHEDcQ6VEVR+qIqDykPtdqrHReRZJGTDbBxxbECkkB4Kg5A3FMm5fU0eMPwwkPwahCOrskRF2g9DLGtn62SMGmzaRVfPl0llEC8YiogsmPETLiCKfi1NJJkJEXwiZDpIauzs3k2lpxzGJ6iicgRKajBV8okXK8QL0hUIS0/txebUFnsX2pysas0HZ3gDBwXMm8Zlw1m6g8yaiZauUhLSVVFus7fLWbxyCjKXSfKPo5Fz4vosuiP00zU08vDcJkSgkPKQqKEPdoLqPMKw52fFeYlAuVPOUjkSL9Ia90XAQcbp9zoSNY6b8vR2qaf6tdOJzTTIoJnNsbqii4G+pNUdKiKg8pJkPdISEhIfOGq1QKUpQKUpQKUpQKUpQKUpQKUpQKUpQRDBfF5NmzbzZlNb5TJv82pdURwz/p3nX/f2v/2SNS6gpEzLIRcebtWxqHr4SSIB4xZQuymI+cX/ALuzVuMvyF5CSzdumg2ms7dtzcN2ii2hhDNfIThdT6mkPeU+EUIdI6R5RqmVZQnGRjrN1W935JKdAxuPC+4njhQuGOn0lFOXV3UxIuyRVZFlEyeXP30MciLlu+XJ5PTm5Mm8k4RLSoSmr/J7fSSaafZUUEuYREioO+NkZCbyRu8xhVzk886uoPvrdNU3BJ6e17nsyLhtW+odPSFNIkX2Sq/AbL28g/6fkTt1ks2SJN3hNVenaT72p445US7Q6URT09nmqXr+9nE8ZXlpdZ0zhnS/KiI6pCfcFyiSmnmLV2RTHSOntaR5Rh09meUyqd2qrr3qRKBcEYuLXTRUTL7G4eadKan7S3ElB7w0E9c4bEsUxXlo7HWg2SFK6kzJLPiumPdLiEI6fR7NdQ4xishqasE8AeqKDoIG5EiRD5upNQiqAxGzx+/v0tvhPFJTtOnzISUL8o/UJQv9SPq1SJvF3oZMMIti0Ap9Mt25Nyi2KihEomssWlRPo/MIojy6tRaqCd5zsuiJYXCstFyLJZUUxF9/jVNMU/NIvphHvcyZD2u1UUmEckhYsWM+wZ57hzxyKbRi8W6UmIl3kZBTmRUEtQim49ERW1V44eam8YmiY46+mock1lEeirCs8YkommKiiZNVNThERFQSJRMlB5h5quJieTscrfEwVbMoHKXbfjXamYuIybR7xAQ8qw9rm+EH0hoIh76lYbFFZ2HVmczxCOVOyqJnw5zGFh7QERcyiY9kuJqIR7RENV7HduksUO1cyGzjJHAOLkLeQbXRNu4Ee9qEtI8vN5vaIeWqFkEJKYfNNsrw1uqgbK6cccKXDERI1OVm6U7zctXiVi+DIh7Qly0zD8axccov7gPpqHgsxbrWhuE5VR9y36erpEcsn3dWkiEeUuVQR7IlQXkLaVMJWtxtlGdfk27dT+urjje1C2Qtni8Vg+Vq9Ddkzdpmm1TUQWHdvEkyW1D2hL1S1Vzx3EG0hEN3COTZg2K3i1ESmVC4Kg8pJ83a0kJDVfxHEIvGnsrINV37p9KEkTxy8ccVRThjpH5I0EfymSSyiJcwsjsvyCTRWt8A5Fuinq+IuJxuUvSHmGok1hM+xXGyi5qKaZpi7hMk3ESZE4cNUdXKlqIfpgRHSOoR7vZ71X0pQYo44xbJPlMXxfLXfuHIFwWUXkDb3QYt1P8AQnSKnMnqL4NRMh80hItOqPZpsOb5A4KDSgEMbySyZKDHWcXWZuRHfvUaKKWEgDrt4sTLTvHUlWVmTYfi+S3TVncfYvF07iSayiPjkyHs6VB5h9kq8rHBYJlKMZASlXJsVCUag8lHDhNAiEh1CKihc2kiH2qDXftA2FZdiSQrSMa8jbGqSYk9uldre+/lEXQFcN97fZBSt9bfVrJBm7j3qzF82VbOkDumqiqFxMCt5bXtfrtetwcgyayLJZi+bIOmq46FEl0rKCY+aQl2hrFDwgfBnY9BdT+IMHLhEE95R6anj2lhte29ve/UokPVe6J82624DG/JcMJKVyUAkzuBjcSt5bXrjQXE8HJxZptjxlyXYSlWdy9pykH9Otqdanti7WWdZwwSh2Cr10s6bpogmO+91LLAqP3urhXK979VhEr36rVthoFKUoFKV8oI7lmt4q0gU9dxkCLpWnut0+ZT5WoU/aqz2SZKqM5lu0VtdElotccPxBNYtKd3ihCKy3Ny6eMQjq+xtyq5OWTaWPo5jl6wWIYGK0p2LvEKZLF8rUmPs1ZPIIVZq02Z7NVXLYV04xR8+TdBq6Q6eqC3IhH7IPSHimrm06dVBLNkGIIMYNuj8E8l2/GfuhXIiJmJcymouyo6U1KEXLylp+pjUcyXIizKdbzCYmMMyLRjrNNHiDpFTgi94Jcqiyini26ZcvaIuVMqnG0pRRLApJlF7m7jJ5VPHWZJl8C3EuCWn0RTTcF7VUPY25xWRykpL3Vi02samKjJv0lPlIhJNuOnV9RaiP5R0t3qCV4xsrj1cccDlaAqvnyamlvdTjJsSUHSRCRfDOObmcFzEXZ0jpGu7Z57zLYzH5xKt4FpMrakXUmsSY6nQkSKhCp2RJQky7Pa9KqZtOy+MkJy2INXpPW6aQrP2Me4HpUkoVi4LJPT2RLSRKKcoiAiJEIkVQNZOIF3isY6jorJ3LNd0oMA34fDv0hJRRRwKJdpPiKaRHtcEUyEdJFQXCxnJJTFJl5ggY2vIoNVFHUao2eoio4ZKESg8NNQh4nD1EmWku6PnDXOU2hY5KwHFzHFHzXHJBYm6Lh8gKoqKioSfDJMSJRNTUJCI6e13hKrSe7yUBMRuzrKMWUZN01CWTTUU6QSbUtRJqCmQkOpNMdJKJkJcpc2qpfgkjHQWQYxIDgbMIyfekzjXyj0lHzdRQSUIujqEpwxLm1aVBIdXMNBE8mjXpzhs1I1+vGySqfEjXltLro5ahbk4cfU3hKJkLfV4zurKdmri7Op9/OR6sO8d2ksngm4uo94Q6fdiOU7OoS7xaeGoJdlQRLtV7NqaULlGSq4zBG/fZKTLo75Fi5TRRTaEWqwulCEuHpLmHhjxh1cunVqq2+P3d4fPxco6VS6RETKibvhkRCm3cuCbuk9RESigisKLjUoWrx2otNB6FWMLieft2hJsgwjL26cWs1ItKjhu64nBUIfORWIkdXaFNZPV2auDsYkXqFkYaTWNaSiVlsakFi7SxN/GNVvyjciLV5xVRdu8IC+KzEeDlNkKD0kxcKJcTgovR1ez9NCJau7pGvHjE30zMUMkTCwjk2LxORK+i4arCi4/kVhH2aDIeoJtP2fx2atE3G8WUw1/Yj66AqafOTUTLlURLvCVTulBhheJg8QkpRntPisgbrtdTsTiX1x1pkX1FPlFZMdXd5kx5VB71SWNmYNhdtGQjDPYqEer9IeupmH0ixVEdSL5NbT2hJNIdJahJMu73sh86xCDzOI9zZtpxAAuIgsmWlZup5yZd0qtMxxHazg3FYY2/Vl4cD3oiisiJCPm8FYdIl+5qCPo6qCtY5kfuHJK5C46OnGvV00siRRLxbF4Qjw36f/AGdYdOovSTL7JV4qsbs+x7LkXbVkviqjNlZoszdLSCrck1EVHAqcHgpkXi0x4wiJavhNOoRqYY85WwiZb4pLOFFIN2pw4F8sW/h3/wBCULzh+pkXaHl7Q8wXCpSlApSlApSlApSlApSlApSlApSlBEMH0nlmbuR70sin8lk3+dXvzNRS8ahHtjJN3Iri0SUG3MmJcyheymJl6wjVN2ZFZVXKnv2bInQ/6sU0f6mvW+coe+xd24MQawseSyheaSnav7Kaf6VBYTb3PC4zMIGMkE4prApDFMXJHyt3qyPEcOfSJuzHSPe4jodPNU4wTHonF8ZVGRYtIePZtk5OfRRHxSZCn4lr6QppiJF5xcxauIVWv2aoK5LtChSkF0BcSCCcs9bqI6uJ09ZR8pzd3Si1Zp+qWmrh7VHiSmKQMS/1dHyF+tNS4iXaYNx6QSfyRbp0EGyKYyDJpMcjUTfpv325Nk3bjxHEOxUHiaW6fedqIjxlC1Dw0dIiQkonU12eymP4mMWcrCuXmSvgFODNo31t3yCg3UEGNy5UU9PMQqEKneUIu0UbhMdkUEpvLMkCTcRhKuEZlaJc8NYRLhk6EkS1CSYqDw9SJJrcNER0lVzNpeUwR7OodWFhonJWEy9bx8ci4IU2QEV+UlC0lwxHTp7OoS5eUqDuc7TXjVGVUdYi8aHEr8F6s4fNwZplwwU+G1cxaVB5REi1ctccLTiZOLcWzltFIS2Vuyf+4sgSaigpiIpop8Mu0Qpppl2eUiKrQZFMxGFA6XWxZNpOMX6YuOCRLN0+IJeOF0RKEPMjw+XhkJctfXCCa8T74snwq0SE1JsXyE2uvzRrQVEyT8YXjOJyly8qiiineHshdOCxDE5zK8kZe5jEY2DNGNZt25cMmyxD0hZYCHmTUIlkx4g6S8X2qgW0TEnGPSF2Eg6dGzUVJ8ylG46XAqJ8xOE9PZdIiOpQR0i4RFQtPET5vStIoxUq8y6PctUnzggeJySJ6W7wuGIqNHBd1NYU+IioXwahKDqEhISuTks1iuZbO03jTI4xkbpFN/GOlnKYE3WHxiJ83ZIS06h9YaCPYxOK5RjrxzOtmy83DD7n5K1Rt4mQZmOrjj5wkmXET/KCPaq10rCvYSfmcKj1UgJ6QvcfUFbiKFLtU+kN3fN/pCIkmoQ6tSiKneKq5spyGNQz7H5KLWQKPfaoNwmipxBTTWT6U1TL0kVOM39URru24InBRDGebk1QWx50SIrOB6yFmoLxumJd0iRFRPvatRDpoLtbOJ1pOg3mWQ6WeSRyMugnf6mppEVh9YfF+1qqd1ZbYqSTRihGt734MLlUrFt/+7qcRwn7Okk/k1emgUpSgVAtp2Rz8e6hMcxVJqc5NrKCku6EiRZoJjqUWIR7WnUIiPeIhqe1Z3aYgg42rMCcZ2eJXawanBWFZFPi8RwOoS4nd8SPZ00HqaMNri8xIMPf1Bgq1FMx1QeqyoqD2vhOXmEx9muqdyHaZgiCMxlJ4/NwFnKaLxZgio3cNRULTxNJahIRIhrqh7CwWWWbbbYZ2suIiajsG6xEI9kfhPSL5VUbOXM5lbKawos4x+QjnEGs5crs2I8blLTwwIViESLtaubT5tBYzw5MMaQpFKxi6ibVxMqKEyIU7JIqG3Ruoony6rXUPeRWsWnfa19O+2+sVqzR8OwDV2WR0oWnS5yVUU9PxACPCG/tcDV7VYXUGSfgeQwM5eCyt2o4QauJlWFuskppJJVw3vdIx/CSXD/K1nN73lRtyZBOD/4kS/WGtfHg+ZjJR+MPGiY2djj8uyyFJsd94mKZXRPfby2EeMKly+Lh2+vWU0Z4T2GCoLaYeMkVrdok1uUvV7Q/ylBeS0K8t2comPa6OX9XS8RKbuXKJD2m7cv6uoAx8ITZk7votKSg6uyoES4VE/VJNMhKq9CbXtmkqv0ZrmsOm6tfT0d4v0Vbf+5raSoK/wC5E9a3VlTi/rM0fm0vG5Ha3VkiN7elHjf+lVWaroukBXbrJrJl2TTLUJV30FoNtsWTfZsUCq7Wdusln45k4WUGw8TiOEBLlHyDwUyHTVJysxPwoI9BV22HUwjxFuQ+MU0k/U5fREhHV2u0PZqWbZLWc5Ts0jd/KtlQuCt+4tHKn6wjUO2xOhx/bnjk04dg2ZvWCIlrS1cQmr0dQj5pcN0oXqiVB82hmSUPgHDPslJOt3a3LCyXUH2hKqdsSZR0pJs2DYFcghU0XArJSDbpTdumnwRbkmooPaLxnKJFy93lqv7TUEGOJxMkomfBxjJuG91d1qsRJl7PDWTKqfsfx2Hdqu8dmzlVnDNJLo1imnfLwb9HWAdKnZFZHieq4Hu0FV2q2ZYzKQULHIxGKQUwSwSEmnGahuSekk25CnpERU5i1FfTpTIS7VWybY8ymXcptJTyiznJ2kh0WOeI8NNERU4SPSuH3iT4hJ6vg9Q6quBluPSGO5Ssyin8uo0kkRcRke7fKLN1lkeZZoJKERIrEIiomoJDzCp2hHTULl8etL7S8fzhgh7vSTpLiXYqDwUlmvRvhO94tQSESTES8ZxB5hGgrWMOForKGakI4nniijjo7lrLyvTCeJqcMhTUTIi4KgiSxah0/BlqHTUc2Tvpttj89kcphTuAfR5KEyF0K2lvpbrKdHRFbsiJIply9rSIly6a7weZkOYx83gmPMMfhVmyjXjSA8QUVhUURW8coXixEhHTp06hEeUuzVYwRi9PJYOLaQmRrqOlFPfUs8Elo5TxZDxE3BFpIi1EPLzKCoWoR5dISHZlEoY7tUKHZEaqKKLriKEWolFFEY5ZRQi7xEoRF6xVGdtYJpSmcCmPKLZ0py+dwYxT/eCJe1Uux+KcbNM0J1kLpZxj3R1E2s0Wo+GShI8rz7HpTRRTFTskI8xCXaguRrllT1wKJlxMmk0Wrf8Ac3Cyan6LNm3U/LUF1dpTg02Uo5JyTYhYRixLChxOGQvCLVp73q1ZXGJpqwx/ZtYjUVspjk81VWENIimo5TTRIvNElhTH0SIauvtfnEoyPmH6rs2iSbpm16QmjxCDo+p4oWnzRHl5uXzqtQ9gnbfH4aJXMUXjfZ21cKKKDq4ay0iioWofWEvk0GWyZakxLzhrnVsc1wDJsuFsnI5laOsgRcO0Si4b6tXa1aXHN7VRz6A73d/04VMu8S0YKmr5SlBe5RVNO3OomPrFXlVlY1K2pSRZiNvOXGrPpbEpZC3icsilPvrY23Ur0BsiyRLmTyzHwLy8uJNaC5qmU40lyq5DEp39J6nb+lVDyCfwGaiXERLz2PO2LgCBRFV6lpIflfpD2aiwbNs6S08HNoNPT5uMNa9CeD7TketHaJFD6uNtxoPC12ht8RLoj3IG+XQiVtyDlm4FaSRH6yyY/sjT9kT5vOEi5qmMbtMwN4A/85mTMzHVZOQuTNT5K2kqo3va2vfdMYfwGnXSti+15QSTU2gw6yf7ZCp81BMQzjCy7OXwBf8AmKPzq5+/PEPtrgv4RR+dVvL4DtHLy5NjCtvrFBI2/q6+e8DaJ/1zin8EI/3NBcgcqxch1DkkOQ/XF+n86vo5PjZFYRyGJIr/ABC9T+dVsS2c5+RERSWHqEXeKIR/ua4ls3zxQdJO8KIfNKGR/uaC6nu9Bf8AXcd+cp12hMRSgaglGJD51nA1aL6GWbedhP8ABLf/ANPXAtl2XlfUSGCKF6UU3/8AS0F4rSccXLaQaf64a7Onsv8ATm/+tGrNfQvy3/q/Z3/BKP8A6euFtl+UB/kTAC9IYxuP/wCLQXqF02PsuUS9VQb1y6Sh9mT+VVk/oZZQPMMFgRF5pR7fm/8Ap6+/Q4yv7Wdn/wDByP8Ac0F79Q+davtWL+htlFv82cGL1Wif93XBXZrlBf5q4Rb1Wgj+qNBcfZCVl8ISfb+Z+8ePNX17KOVCH9EhqKbYHi7TY7tIkU94KvuMxQL1hTaj+lqqhjs8yEWosxxLGmzfTp+k2zdMhH0SISES9kqj2VwCQ4LBEpgrBh07Io9Hpyb8VFBEpFPu6ebUPLQerHkEY3bJlscg70pME1AQa8HsijFNExU4nqkQ6far27VRSvlkM0L9jp4rpES7oqO2yZfyZENfZH/BHhMPGj1yYNpizVwKNkbmKnGbqNSIi7ulRFuPd1cTzq57U2iziNwt+Pi1HDd1jrlQi08NwonpT1eqsjp9qgkR/wDw8PP+1KLcb8s9Lif7wqh+MsUtK7S7Hp7ebTUlHceoXi1nhOHCanqkoJCP5MS7VVCLyZhJ7N5nD26Dl3MyXGWi49qnqW4brxyahauVNNNRQkyULSIkiQ9rlrtnMRybGcLcS6ZPX04/lElpFOISJY49mSipKJsxLmIkyWULV2iItWnsjQQDZ5IZfbDZuOfQUpAC5lU2vuktdZN06HhrF0cVFtRDpIRHiD5xd4tVVBfGYDK1UMck5aab41IEs4cpuZoXSaBJkoSLlFRQi06RERU1cpdIHUOrSVeSaTy5rCSTDZ8wuzhJA0xTh5ewrvCuOorF0VQi0iXKOr4QtIkQiXNTLIcsmwcoR1hycOixkWbfIJAly1C48Xq5S7SIksJaeJ6Qj5wcoSYeQMA3ThMiRfzcbJlHtMdJjxFHCai3MiooPdLURcRTUnqHUOmr07RceYRuIychj2Nx6Elawlxmcemo4EeIPEIR08xCGou9zd0qtsiK8NFNYdpJyPQIZkmmjduVk3Ls1iIWzVv9jUW5iJTmJNHhiJDqUKp82wHGsdwgX+VrP37piw6RIvlJN0RKEI6lC+E9bTQWfQXY+7xLxsg9erJ5BGFqeEoSnLJuE0fhOzqRL0fOq4O3okrY1kPSHaLNEpHmVWHUI6o5RMvlDy+1UKw+Mcus0xmLUJ4q6cSyDp70hwo4IRYJqKKcyhFpEXDjg6fOR86q34QcwaeHOwau0kHUm8fEy8XxONpR6CKfrEosPN+tQd+wY1VGrziCQqFkUcsQl5xRDfVWQVWK2Ys1QWm2kSqgivfLnSbVVdIlBEWTJNqOoRIdQiSfnDU9GCzNX9mZKDovLyJk2H+T+cVBOKVC74/P7uZVM/8Azl8P6pV99xJv42qZerkz4f6NBM6s9talnWN7RIGVTxUsjCVYLR4o2H4NRMuMPdLmIdXL6JVLyhpsey2c+zkjgv1k6pcpjku/b3bvWLxyjvFTd7siXMPZIdSfKQ+cOmgig5o8tbcrsQdH6NmC39JvUVzeRkWOI5RnR7Pk8YknKTOHx9JZJPjEoSpalNIjqT1EoI82nUIjV3GkRNtW9kCa5Itp6uIU6KhF8qovtGtiJQDiLztR+zZqjrEn2Qt0+Cp3VE9S3wglzD2uagwHz3aPNZTHe4jl9JPIhAwNoEi/VWUTIbbuJu1cOxFa5dVh3WsV7de7fUHqQ5/FqR07dZV01XvICTywpDYCTElTsPETta1krlYbKWD4gUT+vUeoKljc/N41KDKY/LPYp8IEFnDRYklLCVt17bxvv3VWF9pG0Ne/js7ydTf50qvf+lUVrmmoQWKw6dxW033ja/72/wAl/v2oPZOTUxOvBeTcs/lHIp2TFZ44NY7BbfuGxFe991t9+r79c4CdlYJ3ZxGOuFe5CRpmmKqKu7fusokdrgpa2+/UVr2qnWIhvvte9vwXr5QTiD2mzsW9XeCyiyWVtaw3aJHG8K+/tD0EkOu/k5t9vvVdOB8JiVZO24JS+cRje9tzhRWSbS9rX3eUU124Fe17/Fdbqt8d/jx0pQZQynhPLOMxxaUdvLyrWFJw6Ba8DZsvxVEVEdBp2dXAuot+oTG269t9ivvtaq5b4RsLtItHM/cxWIfxrg3KbtS4b125ASTlBNO+obqKIqHcRIrWIwG1r3K42viWBEF94Fcb7r232vu6r23Xt+9Xa0duWj5J8zcKtnSKoqorIlcDTMb7xIb23XG9r2te17eTdQbLMPkGGV4zZGUUJ3HzbT3Kk1FBJOyiwp+Jcc3ZFwiQkJfufeqARjmaxWdJu+XTGdx9QRcKLFw03CenhpuSL/R3CIimop9TWRRIuXVVrvBo2lWMCh3jWQeoKJptHaaq9hTUS0qGKSV91gFYTsqqiNtG8bqJ794JkWR09Fx+cR0SqM8ijNppkpjuRogKiMgiQ8yKg9ktQ8qiJdrtD3hEJBkuQYzkuy6XmHzZwqgzAuMxU1IumrxK/Kny8yawqadJD3tJCRDpKvBbZa3d4njDd3Ny8XMwsb0JSQjXIprKComNlxIiHskQ6tXaG/MOmrM5AjNQMw1ZPW6GPzTcvpdu8ckLJ5wxLg9HdF4tZNNTSoLdxpJMhERIR5aqD/JZLGmSsXvk2nuhFLNeK5cuhTXcKKIpip9M6k01BFRRTiCsSZCJaioJPjEVKSbcHMHi86lCI6W8MSDxu16Q2HlFZRwREsIl2hTTEdI6e0VTKIx/aJAAvMNpoZYjPUeOuHKiyIp+ai6W8ZxPSLxZdnSParyNdrWPRsU3j4uKEUW6IoogpMx4iIiOkey4Iu73RKo9mu0TIXTEjeO0Meiy7RJqKN+J/wCKUTFQvVbokX7YNBSM2y88jyZQWrmZQcLKcGMFFz0cm/BEeM14fZF0SxEKhLCSaaI6uYe16NisS2bXLLiDpMRBis1iCRR4YykgsWlw5THuiRaUUx7IiPdqn4ngxZAgtLyKJY1iqiIpvZBRv0V1JNxLUKKKfabNyItWoiJZTVzEWrllGf5g0xKKC4C1iXTRmRwUYtcQFmiI8PpSyY/VObhppjqIiLTp7XDCL7VHTeRyaEwF9M9DTcLkjIOyIU27gSLjSXjC80eGiOnSWpYh7pVPIFKCzva9nXDcN5GITx1jDko2VEhLiE4UUESH0STrBLbBm0bkNlI+OZXPU7s4Jyu4Jc0AGx6UEzvfde1yVVVVMbWE1VL6RsIWI+3CNsuQYZiL7F8bR9zWD+9lXSjde4OVFbJCHwu7UCdyG5XENJcxWEx6r2DOPIs7f4O5CEd5zjEw5DlSbrtXBSRfuibbiai9Lhj6tU6+1Pai75ofZi8epl2FFmqjNP5Tgky/RGteITsym7Udt5Jy2WVGwqE3Pg67Wta1t9g3Wvfdbrv5b3679d99crZFkFr7/d2T3/X6Wf8AbQbBj2n7bR7eyzH0fRWyZqmX+8qpRm2DMQbFed2dMGy4l5GuXR6g6faUGtdo5ZlIlcgySYC977+V6pa3+y9elHPM5R+BzPI0/UlFrfzFQbDi23SA9rB0P41xf99Xrb7WMhWHiI7OuIPnDlEaX9dWvEdqG0sbbh2h5cNvrWmnHz68C2bZmsdzWy6fUK/lI5Fa97/vlQbIQ2o5QXZ2Zql6uTRpf11c/onZX9zFf+Msb/fVrXLLsrLtZPNF+F+r86uPvryn7ZZn8+V+dQbKPonZbaxadmKo3t52SR1rf7yvn0Tc0+5mn/GqP+dWtj315T9ssz+fK/Op768p+2WZ/PlfnUGyf6JuafczT/jVH/Op9E3NPuZp/wAao/51a2PfXlP2yzP58r86nvryn7ZZn8+V+dQbJ/om5p9zNP8AjVH/ADqfRNzT7maf8ao/51a2PfZlP2yzP58p86vvvtyn7ZJj89U/toNk30Tc0+5mn/GqP+dT6JuafczT/jVH/OrWzfLMpv8A5yzP58p/bXz315T9ssz+fK/OoNk/0Tc0+5mn/GqP+dT6JuafczT/AI1R/wA6tbHvryn7ZZn8+V+dX22WZTa/Vksx+N6p/bQbJvom5p9zNP8AjVH/ADqfRNzT7maf8ao/51a2vfdlW7d75Jf88U/tr577cp+2SY/PVP7aDZIe0zOO7s1ZafSy1mJVHHCmb5FHYrj0hiMdCtI+XYvnUgpPt3HK3U4haUx5iItOn2q1/ll2VF5ckl/xPFLf8a6/fPkn2wy354p/bQbCvCWTboJw2bNJUmoxqnRJFVqQEpZqsSZJqae9w3CbcuXu8TmGqy4aNs5xR9DuAVjPfEiThvq5VI+TR+GT9YVExL0tKndrW6nlGRidiKckFh37yTXXJVM/r2MD3iY3+MSte17dV7XtWUvg97VYR0zXin7xw0ZjucLKuX11XaKo3EUXIXLdrNIbWBSw2txEhTKwcqw0FeQXswcSD+cB+2IX+meh2axI/TxcpaST8YRLcqzciLh8TiJ8pENXew6ezDLoFlExb+zW7S1kZifuKaxWUEvgER+DUcadPEU5k0ysQiJF2fFmeL++9wL1mpHMsvsy4Pjh4kdPsy5tJD9UT73eJMi7w6SKAwMlJ4lNJsGwOMYlkwFIo10SYkoI8o6dRCi9TER0ioJJrCPLqUoJ69wnL2SFmjxSYyLd1+6LWZ8cp5vGZutTcvZ0j6I14sWwSOy9R8jk/u5CyTJdBvLxLZ5w2sgimXEbqEnvU0iQ90VOXcoOrTVZZ7W3jEk0Z+GbpqkPls76GRfk3Yp/okXrFUQz/aQkvLun8FdyzdSEQTEujP26yiiiawqJin0cliEiTJwIqae0Q6eaguM2hY9nt1cSDxAlHEhGC4jTULxaKiPiXHDHsioSZN+btadQ9nVUX2p5slNrBDxDhD3MaqEqs7W5kXCiN9RF6TZuWklC+qKCmiOoiLTbfLDXQeJ3cuUImNWUFYG7pV4ooSg8pcNMlOlOyWRUJNQdKKZaUy1FUvxrB1XyKcxnTNeMx/iJ8CHWEemyyg/Aismnyppj9Tap8o97vagqeyeOcNYlfMU0F030ykMXjKLr4YWva6Qp6ShanCnq1C8syiA+iUzFxL9Hx3GWvTlEVhEelIsuZEkyL4QlnWouXtC3Eu8NSnbDnyOPJPTerh7qWAUXLZB6CSka2Vvv4Kal77ruFbDc7nbqSECPVpEdWKB7ZbsXb6KRTWkcefps7Sbe+kOmm3WTIRBQh4qaAoh0cBK99421kImpewhmhsm2eTDfDYWSkMtyGNl3SSj5yi3s34aKztTpCw6VESLtFp5iLs1NPevkQ28XtEnh9dqzL+prAHJvCd2syUo6XjMldRrJVRQ02opIFwRIyuIidkrFyjcQ33ve99O/491oxL7Z9ok1HKsZTJpNa6u7cuUk6G6e69r9QCrw777W3dYX6r33br7r2DYPkSz3GUeNObZW8Wn/APMGzFP+iNWwmNukjGoWdx05aSZqrKgyeSEW1YtnnD3WIklVnaV1RtqtvuA38tvr1gyWQzPuoD9OTVaukx0WcMxsgd7b7333uGm979flv17t1vitVIoMxy8MKaCIcu7o4ca4aeG1TTf8dTfe1vJcLJ9Vr3vfepbqtfdvvuteHZH4XeeungWj3goNCTtdSzSPSaqCe+++w3WJza9t26+/q673tu6t98bDISvfcmA7/rXv1fv3rhQXRzXbhm2R9MQvNTdmq9g4XSZZY1Et2m5dSXCRLfexeVLqsW7y21VBlMnnbvU3qL8mTkBuNlWKYNTvbf3rpWG5X6/LffeqPX0b2te97jYuq9uv+eg+VysI7u3b/bXGlApX2/Xe+62771fKBSlKBX227f13va33rV8pQKUpQe+ClXEQ+6SgCSoGN01261r3SXTv5QO1r2vuvutffa9r2vaxDexWte2S2yvbe3VkVIpVR0+RkFgUcN5JO3AuAiJKGrwRuQqhe2+zpMd53TuookF7a6xapQbL4PMoXIIZNoo5j5ONeESaDCfIRFxp5fpd1zJuh1avOLzirlbZ/izRS5RzXN8P1dpOLdLKNz9LSnxE9PyfVrXfiuaZHjTlVxFSKyZqWLqMrmGot2o7he+k73tbdz2K3Xfq37r2vO22p5RjOZXxpgoF2bIiQEhXXbmrzX51OjqJiRdRd3v3oMqBw2KK5CWebSHFvsaKJIl8pNuJV2tMfw3EN043xpuzc2/y1lLzeoPqkoRKavRHTWOD/bJmjeJinNnzhW68eRqWVkXnjC8VzFpWHm579nSPo1a7JdqOWrQ8ZKIu0mrl23XZrqohuWUEbBbXda97qa73ve972K2/fe27TfTQZb7SNqLSII1UlzkJdFCzpus8bEimknfruo1al13uI6vHr6RHl5iEtNYe7Vtp7nME12oFJJp3fk6ElHtj1agJM7q3sFiWO43G1jK4iAb0wTAfLblyus5WNZwqaqplqIzK97lf697110ClKUClKUClKUClKUCvtr7vitevlKDlqtu3aB/D11xpSg+7/vWr5SlAr7v+9avlKD7+KvlKUClKUClKUClKUCvVFSD2Kkm8lHOVWrtsoKqKyR3EgK199r2vbrtffXlpQZabGdtjdaOCLlbC8ZpJqSD9NczTSbKXUvuNEkwtdqpa978w+JvYg60jUuNZAtMhg8mjG0TJe5083cpCqlFz6Sbd9pLskNy8Wt6w6fWIq1osHjtg6F0xdLtXAWvYVUVLgY2va9r7r26+u172/Beq5jea5Hj0a7j4t+abd3awqpne5hcLat4aL30br6uu+7f1W3Xt17w2IDgGMtLknHltDxZP/R2blZZH5I8Ya+2wmHJMhVy3aU/T7yKfGREvkoj+tWI9ttOXw85JQzG6LcdAgmo3XcNuFp8pCmioKeq/q6fRqs51thzKPTlG6btZRPSle1lJN+XD5ebT9MfH6WqgyiZMMWwS1ncdBRWNOV76bSE044zxYi5eURIlFCLzdQ+rVtNqu2qIxUlV01n6siC92jlytutIBa43vYUE9F02olYbW1Fax7rlcQK9rlWNGd7RcnSWtZJwg3RmWCblwk1TuhYVOYRKxJ3sZXHSN7ayK1ytvva/kq2CzlwsmKaq6hpiZGIXLlEi3ar2t5Lb91t/4LUEyz3aHL5C7bm1evWqKTQ23UpcDIVbX4wFe173OxXItZFe5K3vci6riAQelKBXYiAGV+IqKdrW3772vff96274/wAO6uulByOw2K9gve4/Fe9t1caV2tybipa7hJVQPNTUsF/37jf+ag6qUpQKUpQKUpQf/9k=';
+document.getElementById('car-photo').style.backgroundImage = `url(data:image/jpeg;base64,${CAR_B64})`;
+
+// ══ STATE ══
+let connected=false, simIv=null, simT=0, curGrp=1, curMod='dme';
+let lastClearDTC={}, lastClearExc=null;
+function fmtDate(d){if(!d)return'Jamais';const n=new Date(d);return n.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+n.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+const live={rpm:0,speed:0,coolant:88,oil:100,map:45,load:20,thr:10,intake:30,o2:.5};
+const batt={min:99,max:0,drop:null};
+
+// ══ CLOCK ══
+const tick=()=>{const n=new Date();document.getElementById('hdr-time').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');};
+tick();setInterval(tick,15000);
+
+// ══ FOLD DETECTION ══
+const ro=new ResizeObserver(()=>{ if(connected) applyNavLayout(); });
+ro.observe(document.body);
+function applyNavLayout(){
+  const wide=window.innerWidth>=768;
+  document.getElementById('side-rail').style.display=wide?'flex':'none';
+  const bn=document.getElementById('bottom-nav');
+  if(wide){bn.classList.remove('on');bn.style.display='none';}
+  else{bn.classList.add('on');bn.style.display='flex';}
+}
+
+// ══ NAV ══
+const SCREENS=['scan','dash','battery','blocks','exceeded','dtc'];
+function go(name){
+  SCREENS.forEach(s=>{
+    const el=document.getElementById('screen-'+s);if(!el)return;
+    el.classList.remove('active');
+    if(el.classList.contains('flex-col')) el.style.display='none';
+    else el.style.display='none';
+  });
+  const t=document.getElementById('screen-'+name);if(!t)return;
+  t.classList.add('active');
+  if(t.classList.contains('flex-col')) t.style.display='flex';
+  else t.style.display='block';
+
+  ['bn-','sr-'].forEach(p=>{
+    SCREENS.slice(1).forEach(s=>{const el=document.getElementById(p+s);if(el)el.classList.toggle('active',s===name);});
+  });
+  if(name==='dtc') renderDTC();
+  if(name==='blocks') renderBlocks();
+  if(name==='exceeded') renderExc();
+  if(name==='battery'&&batt.min<99) updateBattery(batt.lastV||13.9, live.rpm>400);
+}
+
+// ══ SCAN / CONNECT / DISCONNECT ══
+function startScan(){
+  const b=document.getElementById('scan-btn');
+  b.classList.add('scanning');b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Recherche...';
+  if(isRN){postRN({type:'SCAN'});
+  } else {
+    const b=document.getElementById('scan-btn');
+    b.classList.add('scanning'); b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Recherche en cours...';
+    setTimeout(()=>{
+      b.classList.remove('scanning'); b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Rechercher Appareils';
+      document.getElementById('device-list').classList.add('on');
+    },1800);
+  }
+}
+function connectDevice(){
+  document.getElementById('darr').innerHTML='...';
+  setTimeout(()=>{
+    connected=true;
+    document.getElementById('conn-pill').classList.add('on');
+    batt.drop=1.3+Math.random()*.7;
+    applyNavLayout();
+    updateBadges();go('dash');startSim();
+  },1500);
+}
+function disconnect(){
+  if(isRN){postRN({type:'DISCONNECT'});}else{
+    connected=false;clearInterval(simIv);
+    document.getElementById('conn-pill').classList.remove('on');
+    document.getElementById('side-rail').style.display='none';
+    const bn=document.getElementById('bottom-nav');bn.classList.remove('on');bn.style.display='none';
+    document.getElementById('device-list').classList.remove('on');
+    document.getElementById('darr').innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>';
+    go('scan');
+  }
+}
+
+// ══ SIMULATION ══
+function startSim(){
+  if(!isRN){Object.keys(demoCodesForSim).forEach(m=>{activeCodes[m]=[...demoCodesForSim[m]];});updateBadges();}
+  simT=0;simIv=setInterval(()=>{
+    simT+=.15;const t=simT,warm=t<20,p=warm?t/20:1,d=warm?0:t-20;
+    let rpm,speed,coolant,oil,map,load,thr,intake,o2;
+    if(warm){
+      rpm=1100+Math.sin(t*2.3)*80+p*50;speed=0;coolant=18+p*65;oil=18+p*52;
+      map=30+Math.sin(t)*8;load=15+Math.sin(t*1.5)*5;thr=2+Math.sin(t*2)*1.5;intake=22+p*8;o2=.1+Math.random()*.85;
+    }else{
+      const c=(d%30)/30;
+      if(c<.2){rpm=2000+c*5*4500+Math.random()*200;speed=30+c*5*130;load=60+c*5*35;thr=40+c*5*55;map=80+c*5*80;}
+      else if(c<.5){rpm=3800+Math.sin(d*3)*300+Math.random()*100;speed=130+Math.sin(d*.5)*20;load=35+Math.sin(d*1.5)*15;thr=22+Math.sin(d*2)*8;map=60+Math.sin(d)*15;}
+      else if(c<.7){rpm=3800-(c-.5)*5*2800+Math.random()*150;speed=130-(c-.5)*5*100;load=10+Math.random()*5;thr=1+Math.random()*3;map=20+Math.random()*10;}
+      else{rpm=850+Math.sin(d*1.8)*60+Math.random()*30;speed=0;load=12+Math.random()*4;thr=1.5+Math.random();map=28+Math.random()*6;}
+      coolant=88+Math.sin(d*.2)*6;oil=100+Math.sin(d*.15)*12;intake=35+Math.sin(d*.3)*8;o2=.1+(Math.sin(d*8)+1)/2*.85;
+    }
+    live.rpm=Math.round(rpm);live.speed=Math.round(speed);live.coolant=Math.round(coolant);
+    live.oil=Math.round(oil);live.map=Math.round(map);live.load=Math.round(load);
+    live.thr=Math.round(thr);live.intake=Math.round(intake);live.o2=o2;
+    const engineOn=rpm>400;
+    const bv=engineOn?13.85+(rpm/7200)*.45+Math.sin(t*3)*.04+Math.random()*.02:12.58+Math.sin(t*.1)*.03;
+    if(bv<batt.min)batt.min=bv;if(bv>batt.max)batt.max=bv;
+    batt.lastV=bv;
+    if(document.getElementById('screen-dash').classList.contains('active')) updateGauges(rpm,speed,coolant,oil,map,load,thr,intake,o2);
+    if(document.getElementById('screen-battery').classList.contains('active')) updateBattery(bv,engineOn);
+    if(document.getElementById('screen-blocks').classList.contains('active')) updateBlkVals();
+  },150);
+}
+
+// ══ GAUGES ══
+function setG(key,val,max,norm,warn,danger,wt,dt,cid){
+  const pct=Math.min(100,(val/max)*100);
+  const col=val>=dt?danger:val>=wt?warn:norm;
+  const ve=document.getElementById('val-'+key),be=document.getElementById('bar-'+key);
+  if(ve){ve.textContent=(key==='o2')?val.toFixed(3):val;ve.style.color=col;}
+  if(be){be.style.width=pct+'%';be.style.background=col;}
+  if(cid){const c=document.getElementById(cid);if(c){c.classList.remove('warn','danger');if(val>=dt)c.classList.add('danger');else if(val>=wt)c.classList.add('warn');}}
+}
+function updateGauges(rpm,speed,coolant,oil,map,load,thr,intake,o2){
+  const rp=Math.min(100,(rpm/7200)*100);
+  const rc=rpm>6000?'var(--system-red)':rpm>4500?'var(--system-orange)':'var(--text-primary)';
+  
+  document.getElementById('val-rpm').textContent=Math.round(rpm).toLocaleString();
+  const rb=document.getElementById('bar-rpm');if(rb){rb.style.width=rp+'%';rb.style.background=rc;}
+  
+  setG('speed',Math.round(speed),280,'var(--text-primary)','var(--system-orange)','var(--system-red)',200,250,'gc-speed');
+  setG('coolant',Math.round(coolant),130,'var(--text-primary)','var(--system-orange)','var(--system-red)',100,115,'gc-coolant');
+  setG('oil',Math.round(oil),160,'var(--text-primary)','var(--system-orange)','var(--system-red)',130,150,'gc-oil');
+  setG('map',Math.round(map),200,'var(--text-primary)','var(--system-orange)','var(--system-red)',150,180,'gc-map');
+  setG('load',Math.round(load),100,'var(--text-primary)','var(--system-orange)','var(--system-red)',80,95,'gc-load');
+  setG('thr',Math.round(thr),100,'var(--text-primary)','var(--system-orange)','var(--system-red)',85,98,'gc-thr');
+  // Intake & O2 si présents dans le layout
+  const iv=document.getElementById('val-intake');if(iv)iv.textContent=Math.round(intake);
+  const ov=document.getElementById('val-o2');if(ov)ov.textContent=o2.toFixed(3);
+}
+
+// ══ BATTERY ══
+function v2soc(v,engineOn){const vr=engineOn?v-.6:v;if(vr>=12.73)return 100;if(vr>=12.62)return 75+(vr-12.62)/(12.73-12.62)*25;if(vr>=12.45)return 50+(vr-12.45)/(12.62-12.45)*25;if(vr>=12.24)return 25+(vr-12.24)/(12.45-12.24)*25;if(vr>=12.06)return Math.max(0,(vr-12.06)/(12.24-12.06)*25);return 0;}
+function socCol(s){return s>=75?'var(--system-green)':s>=40?'var(--system-orange)':'var(--system-red)';}
+function healthFromDrop(d){if(!d)return null;if(d<1.2)return 95;if(d<1.8)return 82;if(d<2.5)return 60;if(d<3.5)return 35;return 15;}
+function updateBattery(v,engineOn){
+  const soc=v2soc(v,engineOn),sc=socCol(soc);
+  document.getElementById('bh-volt').textContent=v.toFixed(2);
+  document.getElementById('soc-lbl').textContent=Math.round(soc)+'%';
+  
+  const bf=document.getElementById('batt-fill');
+  if(bf){bf.style.width=Math.round(soc)+'%';bf.style.background=sc;}
+  
+  const sm=v=>v<99&&v>0?v.toFixed(2):'--';
+  document.getElementById('bm-min').textContent=sm(batt.min);
+  document.getElementById('bm-max').textContent=sm(batt.max);
+  document.getElementById('bm-drop').textContent=batt.drop?batt.drop.toFixed(2):'--';
+  const h=healthFromDrop(batt.drop),he=document.getElementById('bm-health');
+  if(he&&h){he.textContent=h+'%';he.style.color=h>80?'var(--system-green)':h>50?'var(--system-orange)':'var(--system-red)';}
+  
+  document.getElementById('alt-v').textContent=v.toFixed(2)+' V';
+  const ap=Math.min(100,Math.max(0,(v-11)/(16-11)*100));
+  const af=document.getElementById('alt-fill');
+  if(af){af.style.width=ap+'%';af.style.background=v>=13.5&&v<=14.7?'var(--system-green)':v>14.7?'var(--system-red)':'var(--system-orange)';}
+  const ast=document.getElementById('alt-status');
+  if(ast){if(!engineOn)ast.textContent='Moteur arrêté — alternateur non actif';else if(v>=13.5&&v<=14.7)ast.textContent='✓ Alternateur en charge nominale (13.5–14.7V)';else if(v>14.7)ast.textContent='⚠️ Surtension détectée';else ast.textContent='⚠️ Tension basse détectée';}
+}
+
+// ══ MEASURING BLOCKS ══
+const GRUPPEN={
+  1: {title:'Groupe 001 — Principaux',desc:'RPM, charge, vitesse, temp. eau',cmd:'21 01',resp:'61 01 [A1 A2 B C D]',
+      blocks:[{l:'Régime',u:'tr/min',lk:'rpm'},{l:'Charge',u:'%',lk:'load'},{l:'Vitesse',u:'km/h',lk:'speed'},{l:'Temp. Eau',u:'°C',lk:'coolant'}]},
+  2: {title:'Groupe 002 — Admission',desc:'MAP, charge, papillon, temp. admt.',cmd:'21 02',resp:'61 02 [A B C D]',
+      blocks:[{l:'MAP',u:'kPa',lk:'map'},{l:'Charge',u:'%',lk:'load'},{l:'Papillon',u:'%',lk:'thr'},{l:'Temp. Admt.',u:'°C',lk:'intake'}]},
+  3: {title:'Groupe 003 — Adaptations O2',desc:'Corrections additives et multiplicatives',cmd:'21 03',resp:'61 03 [A B C D]',
+      blocks:[{l:'ADD B1',u:'ms',sv:()=>(Math.random()*.4-.2).toFixed(2)},{l:'MUL B1',u:'%',sv:()=>(98+Math.random()*4).toFixed(1)},{l:'ADD B2',u:'ms',sv:()=>(Math.random()*.6-.3).toFixed(2)},{l:'MUL B2',u:'%',sv:()=>(97+Math.random()*5).toFixed(1)}]},
+  4: {title:'Groupe 004 — Allumage',desc:'Avance allumage et retard cliquetis',cmd:'21 04',resp:'61 04 [A B C D]',
+      blocks:[{l:'AVANCE B1',u:'°',sv:()=>(12+Math.random()*8).toFixed(1)},{l:'RETARD B1',u:'°',sv:()=>(Math.random()*2).toFixed(1)},{l:'AVANCE B2',u:'°',sv:()=>(12+Math.random()*8).toFixed(1)},{l:'RETARD B2',u:'°',sv:()=>(Math.random()*2).toFixed(1)}]},
+  10:{title:'Groupe 010 — Électrique',desc:'Tension, temp. ECU, heures moteur',cmd:'21 0A',resp:'61 0A [A B C D]',
+      blocks:[{l:'Tension',u:'V',sv:()=>(13.8+Math.random()*.6).toFixed(2)},{l:'Temp. ECU',u:'°C',sv:()=>(55+Math.random()*15).toFixed(0)},{l:'Temp. Huile',u:'°C',lk:'oil'},{l:'Heures Mot.',u:'h',sv:()=>'1247'}]},
+  16:{title:'Groupe 016 — Injection',desc:'Durée injection par paire de cylindres',cmd:'21 10',resp:'61 10 [A B C D]',
+      blocks:[{l:'INJ 1-2',u:'ms',sv:()=>(2.8+Math.random()*.4).toFixed(2)},{l:'INJ 3-4',u:'ms',sv:()=>(2.8+Math.random()*.4).toFixed(2)},{l:'INJ 5-6',u:'ms',sv:()=>(2.8+Math.random()*.4).toFixed(2)},{l:'Correction',u:'%',sv:()=>(100+Math.random()*2-1).toFixed(1)}]},
+  32:{title:'Groupe 032 — Sondes O2',desc:'Tensions amont/aval B1 et B2',cmd:'21 20',resp:'61 20 [A B C D]',
+      blocks:[{l:'O2 AMONT B1',u:'V',lk:'o2',fmt:3},{l:'O2 AVAL B1',u:'V',sv:()=>(0.65+Math.random()*.1).toFixed(3)},{l:'O2 AMONT B2',u:'V',sv:()=>(0.1+Math.random()*.8).toFixed(3)},{l:'O2 AVAL B2',u:'V',sv:()=>(0.65+Math.random()*.1).toFixed(3)}]}
+};
+const svc={};
+function selGrp(n){
+  curGrp=n;
+  document.querySelectorAll('.segment-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('gt-'+n)?.classList.add('active');
+  renderBlocks();
+}
+function renderBlocks(){
+  const g=GRUPPEN[curGrp];if(!g)return;
+  document.getElementById('grp-title').textContent=g.title;
+  document.getElementById('grp-desc').textContent=g.desc;
+  document.getElementById('kwp-cmd').textContent=g.cmd;
+  document.getElementById('kwp-resp').textContent='← '+g.resp;
+  if(!svc[curGrp]){svc[curGrp]={};g.blocks.forEach(b=>{if(b.sv)svc[curGrp][b.l]=b.sv();});}
+  const grid=document.getElementById('blocks-grid');
+  grid.innerHTML=g.blocks.map((b,i)=>`
+    <div class="blk-card" style="animation-delay:${i*.06}s">
+      <div style="font-size:12px; font-weight:600; color:var(--text-secondary); letter-spacing:0.5px; text-transform:uppercase;">${b.l}</div>
+      <div style="display:flex; align-items:baseline; gap:4px; margin-top:8px;">
+        <div class="blk-val" id="bv-${i}" style="margin:0; color:var(--text-primary)">--</div>
+        <div style="font-size:12px; font-weight:500; color:var(--text-secondary)">${b.u}</div>
+      </div>
+    </div>`).join('');
+  updateBlkVals();
+}
+function updateBlkVals(){
+  const g=GRUPPEN[curGrp];if(!g)return;
+  g.blocks.forEach((b,i)=>{const el=document.getElementById('bv-'+i);if(!el)return;let v;if(b.lk!==undefined)v=b.fmt?live[b.lk].toFixed(b.fmt):live[b.lk];else v=svc[curGrp]?.[b.l]??'--';el.textContent=v;});
+}
+
+// ══ EXCEEDED VALUES ══
+const EXC=[
+  {id:'0xE0',p:'Régime Max',u:'tr/min',max:7200,mn:()=>820,mx:()=>6840,cu:()=>live.rpm},
+  {id:'0xE1',p:'Vitesse Max',u:'km/h',max:280,mn:()=>0,mx:()=>187,cu:()=>live.speed},
+  {id:'0xE2',p:'Temp. Eau Max',u:'°C',max:130,mn:()=>18,mx:()=>97,cu:()=>live.coolant,wp:.77,dp:.88},
+  {id:'0xE3',p:'Temp. Huile Max',u:'°C',max:160,mn:()=>18,mx:()=>118,cu:()=>live.oil,wp:.75,dp:.90},
+  {id:'0xE4',p:'Tension Batt. Min',u:'V',max:16,mn:()=>12.1,mx:()=>14.7,cu:()=>13.9},
+  {id:'0xE5',p:'Charge Max',u:'%',max:100,mn:()=>12,mx:()=>94,cu:()=>live.load,wp:.80,dp:.96}
+];
+function renderExc(){
+  const list=document.getElementById('exc-list');
+  if(!connected){list.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-secondary)"><div style="font-size:36px;margin-bottom:12px">🔌</div><div style="font-size:15px;font-weight:600">Connectez-vous à un appareil OBD2</div><div style="font-size:13px;margin-top:8px;opacity:.7">Les données de plage apparaîtront ici après connexion</div></div>';return;}
+  list.innerHTML=EXC.map((p,i)=>{
+    const mn=p.mn(),mx=p.mx(),cu=p.cu();
+    const mnP=Math.min(100,(mn/p.max)*100),mxP=Math.min(100,(mx/p.max)*100),cuP=Math.min(100,(cu/p.max)*100);
+    const wp=p.wp||.85,dp=p.dp||.95;
+    const mxCol=(mx/p.max)>=dp?'var(--system-red)':(mx/p.max)>=wp?'var(--system-orange)':'var(--text-primary)';
+    const fmt=v=>typeof v==='number'&&v%1!==0?v.toFixed(1):Math.round(v);
+    return `
+    <div class="exc-card" style="animation: fadeScreen 0.2s ease-out; animation-delay:${i*.04}s">
+      <div class="exc-hdr"><div class="exc-title">${p.p}</div><div style="font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono)">${p.id}</div></div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <span style="display:flex; flex-direction:column;">
+          <span style="font-size:10px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Min</span>
+          <span style="font-size:16px; font-weight:600; font-family:var(--font-mono)">${fmt(mn)} <span style="font-size:11px; font-weight:500; font-family:var(--font-sans); color:var(--text-secondary)">${p.u}</span></span>
+        </span>
+        <span style="display:flex; flex-direction:column; text-align:center;">
+          <span style="font-size:10px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Actuel</span>
+          <span style="font-size:16px; font-weight:600; font-family:var(--font-mono); color:var(--porsche-gold)">${fmt(cu)} <span style="font-size:11px; font-weight:500; font-family:var(--font-sans); color:var(--text-secondary)">${p.u}</span></span>
+        </span>
+        <span style="display:flex; flex-direction:column; text-align:right;">
+          <span style="font-size:10px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Max</span>
+          <span style="font-size:16px; font-weight:600; font-family:var(--font-mono); color:${mxCol}">${fmt(mx)} <span style="font-size:11px; font-weight:500; font-family:var(--font-sans); color:var(--text-secondary)">${p.u}</span></span>
+        </span>
+      </div>
+      <div class="exc-track">
+        <div class="exc-bar-cur" style="width:${cuP}%"></div>
+        <div class="exc-pin" style="left:${mnP}%;background:var(--system-green)"></div>
+        <div class="exc-pin" style="left:${mxP}%;background:${mxCol}"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function refreshExc(){const l=document.getElementById('exc-list');l.style.opacity='.3';setTimeout(()=>{l.style.opacity='1';renderExc();},300);}
+function resetExc(){
+  if(confirm("Effacer les valeurs max/min (SID 14) ?")){
+    lastClearExc=Date.now();
+    // Reset des min/max batterie aussi
+    batt.min=99;batt.max=0;batt.drop=null;
+    const el=document.getElementById('exc-clear-date');if(el)el.textContent=fmtDate(lastClearExc);
+    alert("Commande SID 14 envoyée — valeurs réinitialisées.");
+    renderExc();
+  }
+}
+
+// ══ DTC ══
+const DTC_DB={
+  dme:{name:'DME – Moteur',addr:'0x01',proto:'KWP2000 ISO14230',codes:{
+    'P1128':{d:'Adaptation O2 ralenti B1',sev:'l',t:'p',c:['MAF sale ou défectueux','AOS défectueux','Fuite admission']},
+    'P0420':{d:'Efficacité catalyseur sous seuil B1',sev:'m',t:'g',c:['Catalyseur usé','Fuite échappement avant cat']},
+  }},
+  abs:{name:'ABS – Freinage',addr:'0x03',proto:'KWP2000',codes:{}},
+  airbag:{name:'Airbag – SRS',addr:'0x15',proto:'KWP2000',codes:{}},
+  clim:{name:'Climatisation',addr:'0x08',proto:'KWP2000',codes:{
+    'B1231':{d:'Capteur température habitacle – circuit ouvert',sev:'l',t:'p',c:['Capteur HS','Câblage interrompu']},
+  }},
+};
+const activeCodes={dme:[],abs:[],airbag:[],clim:[]};
+const demoCodesForSim={dme:['P1128','P0420'],abs:[],airbag:[],clim:['B1231']};
+function updateBadges(){Object.keys(activeCodes).forEach(m=>{const el=document.getElementById('mb-'+m);if(!el)return;const n=activeCodes[m].length;el.textContent=n?n:'0';el.className='mbadge'+(n?'':' ok');});}
+function selMod(m){
+  curMod=m;
+  document.querySelectorAll('.segment-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('mt-'+m)?.classList.add('active');
+  const md=DTC_DB[m];
+  document.getElementById('dtc-mod-t').textContent=md.name;
+  document.getElementById('dtc-mod-a').textContent='Addr: '+md.addr+' | '+md.proto;
+  const cde=document.getElementById('dtc-clear-date');if(cde)cde.textContent=fmtDate(lastClearDTC[m]);
+  renderDTC();
+}
+function renderDTC(){
+  const list=document.getElementById('dtc-list'),codes=activeCodes[curMod],md=DTC_DB[curMod];
+  if(!connected){list.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-secondary)"><div style="font-size:36px;margin-bottom:12px">🔌</div><div style="font-size:15px;font-weight:600">Connectez-vous à un appareil OBD2</div></div>';return;}
+  if(!codes.length){list.innerHTML=`<div style="text-align:center; padding: 40px 20px; color:var(--text-secondary);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px; opacity:0.5;"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg><div style="font-size:16px; font-weight:600;">Aucun code défaut détecté</div></div>`;return;}
+  list.innerHTML=codes.map((code,i)=>{
+    const info=md.codes[code];if(!info)return'';
+    const tc=info.t==='p'?'p':'g';
+    const cc=info.sev==='h'?'var(--system-red)':info.t==='p'?'var(--porsche-red)':'var(--system-orange)';
+    return `<div class="dtc-item" style="animation: fadeScreen 0.2s ease-out; animation-delay:${i*.06}s" onclick="this.querySelector('.dtc-detail').style.display=this.querySelector('.dtc-detail').style.display==='block'?'none':'block'">
+      <div class="dtc-item-hdr">
+        <div class="dtc-code" style="color:${cc}">${code}</div>
+        <span class="dtc-tag ${tc}">${info.t==='p'?'PORSCHE':'OBD2'}</span>
+      </div>
+      <div class="dtc-desc">${info.d}</div>
+      <div class="dtc-detail">
+        <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Causes Possibles</div>
+        ${info.c.map(c=>`<div class="dtc-cause">${c}</div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+function rescanMod(){
+  const btn = document.querySelector('#screen-dtc .ios-btn-secondary');
+  const origText = btn.textContent;
+  btn.textContent = 'Interrogation...';
+  setTimeout(()=>{ btn.textContent = origText; renderDTC(); }, 1200);
+}
+function clearDTC(){
+  if(!activeCodes[curMod].length)return;
+  if(confirm(`Effacer les codes pour ${DTC_DB[curMod].name} ?`)){
+    activeCodes[curMod]=[];lastClearDTC[curMod]=Date.now();
+    updateBadges();renderDTC();
+  }
+}
+
+// ══ REACT NATIVE BRIDGE ══════════════════════════════════════
+const isRN = typeof window.ReactNativeWebView !== 'undefined';
+function postRN(payload){if(isRN)window.ReactNativeWebView.postMessage(JSON.stringify(payload));}
+
+window.onRNMessage = function(msg){
+  switch(msg.type){
+    case 'SCAN_RESULT':
+      const dl=document.getElementById('device-list');dl.classList.add('on');
+      dl.innerHTML='<div class="section-title" style="margin:0 0 8px">Appareils détectés</div>'+
+        '<div class="ios-list-group">'+
+        msg.devices.map(d=>`<div class="ios-list-row" onclick="postRN({type:'CONNECT',address:'${d.address}'})">
+          <div><div class="dn">${d.name}</div><div class="da">${d.address}</div></div>
+          <div class="darr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </div>`).join('')+'</div>';
+      const sb=document.getElementById('scan-btn');sb.classList.remove('scanning');
+      sb.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Rechercher Appareils';
+      break;
+    case 'SCAN_ERROR':
+      alert('Erreur Bluetooth: '+msg.message);
+      const sb2=document.getElementById('scan-btn');sb2.classList.remove('scanning');
+      sb2.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Rechercher Appareils';
+      break;
+    case 'CONNECTING':
+      break;
+    case 'CONNECTED':
+      if(simIv){clearInterval(simIv);simIv=null;}
+      connected=true;
+      document.getElementById('conn-pill').classList.add('on');
+      applyNavLayout();
+      go('dash');
+      break;
+    case 'CONNECT_ERROR':
+      alert('Connexion échouée: '+msg.message);
+      break;
+    case 'DISCONNECTED':
+      connected=false;
+      document.getElementById('conn-pill').classList.remove('on');
+      document.getElementById('side-rail').style.display='none';
+      const bn=document.getElementById('bottom-nav');bn.classList.remove('on');bn.style.display='none';
+      go('scan');
+      break;
+    case 'LIVE_DATA':
+      live.rpm=msg.rpm||0;live.speed=msg.speed||0;live.coolant=msg.coolant||0;
+      live.oil=msg.oil||0;live.map=msg.map||0;live.load=msg.load||0;
+      live.thr=msg.thr||0;live.intake=msg.intake||0;live.o2=msg.o2||0;
+      const bv=msg.battVolt||12.6,engOn=live.rpm>400;
+      if(bv<batt.min)batt.min=bv;if(bv>batt.max)batt.max=bv;batt.lastV=bv;
+      if(document.getElementById('screen-dash').classList.contains('active'))
+        updateGauges(live.rpm,live.speed,live.coolant,live.oil,live.map,live.load,live.thr,live.intake,live.o2);
+      if(document.getElementById('screen-battery').classList.contains('active'))
+        updateBattery(bv,engOn);
+      if(document.getElementById('screen-blocks').classList.contains('active'))
+        updateBlkVals();
+      break;
+    case 'CMD_RESPONSE':
+      if(window['kwpCB_'+msg.tag]){window['kwpCB_'+msg.tag](msg.data);delete window['kwpCB_'+msg.tag];}
+      break;
+  }
+};
+
+// ══ INIT ══
+go('scan');
+</script>
+</body>
+</html>
