@@ -75,13 +75,18 @@ jobs:
           path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Build release APK
+        run: ./gradlew assembleRelease
         working-directory: android
+        env:
+          BOXSTER_UPLOAD_STORE_FILE: release.keystore
+          BOXSTER_UPLOAD_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          BOXSTER_UPLOAD_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          BOXSTER_UPLOAD_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-      - name: Upload debug APK artifact
+      - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
