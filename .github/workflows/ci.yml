@@ -55,6 +55,10 @@ jobs:
       - name: Decode release keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+        working-directory: android
+
       - name: Build release AAB
         run: ./gradlew bundleRelease
         working-directory: android
