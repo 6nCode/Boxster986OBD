@@ -13,6 +13,10 @@ import React, {useEffect, useRef, useCallback} from 'react';
 import {StyleSheet, View, PermissionsAndroid, Platform, StatusBar} from 'react-native';
 import WebView from 'react-native-webview';
 import RNBluetoothClassic, {BluetoothDevice} from 'react-native-bluetooth-classic';
+import {
+  parseRpm, parseSpeed, parseCoolant, parseLoad, parseThrottle,
+  parseMap, parseIntake, parseO2, parseBattVolt, parseOil,
+} from './obd';
 
 // HTML dans un fichier .js separe — Metro compile chaque fichier independamment
 // Evite les problemes de template literals imbriques et d'encodage
@@ -149,126 +153,23 @@ export default function App() {
       return raw;
     };
 
-    // Valide la réponse : doit contenir au moins N octets hex utilisables
-    // Une réponse ELM327 valide ressemble à : "41 0C 1A F0\r" ou "410C1AF0"
-    const isValid = (raw: string, minBytes: number = 1): boolean => {
-      if (!raw) return false;
-      const upper = raw.toUpperCase();
-      // Rejeter toutes les erreurs ELM327
-      if (upper.includes('NO DATA')) return false;
-      if (upper.includes('UNABLE')) return false;
-      if (upper.includes('ERROR'))  return false;
-      if (upper.includes('STOPPED')) return false;
-      if (upper.includes('BUS'))    return false;
-      if (upper.includes('?'))      return false;
-      // Extraire les octets hex
-      const bytes = upper.replace(/[^0-9A-F]/g, '');
-      return bytes.length >= (minBytes + 2) * 2; // +2 pour les bytes d'en-tête (mode+PID)
-    };
-
-    // Extraire les octets de données (après les 2 bytes mode+PID)
-    const dataBytes = (raw: string): number[] => {
-      const hex = raw.toUpperCase().replace(/[^0-9A-F]/g, '');
-      // Sauter les 2 premiers bytes (ex: "410C" = mode 41, PID 0C)
-      const result: number[] = [];
-      for (let i = 4; i < hex.length; i += 2) {
-        const b = parseInt(hex.slice(i, i + 2), 16);
-        if (!isNaN(b)) result.push(b);
-      }
-      return result;
-    };
-
-    // Lire les PIDs un par un avec validation
-    let rpm = 0, speed = 0, coolant: number|null = null, load = 0;
-    let thr = 0, map = 0, intake: number|null = null, o2 = 0;
-    let battVolt = 0, oil: number|null = null;
-
-    // RPM = ((A*256)+B)/4 — PID 0x0C
-    const rpmRaw = await send('0C');
-    if (isValid(rpmRaw, 2)) {
-      const b = dataBytes(rpmRaw);
-      if (b.length >= 2) rpm = Math.round(((b[0] * 256) + b[1]) / 4);
-    }
-
-    // Vitesse — PID 0x0D
-    const speedRaw = await send('0D');
-    if (isValid(speedRaw, 1)) {
-      const b = dataBytes(speedRaw);
-      if (b.length >= 1) speed = b[0];
-    }
-
-    // Temp eau — PID 0x05 — A-40 (valeur brute 0 = -40°C → invalide)
-    const coolRaw = await send('05');
-    if (isValid(coolRaw, 1)) {
-      const b = dataBytes(coolRaw);
-      if (b.length >= 1 && b[0] > 0) coolant = b[0] - 40;
-    }
-
-    // Charge — PID 0x04
-    const loadRaw = await send('04');
-    if (isValid(loadRaw, 1)) {
-      const b = dataBytes(loadRaw);
-      if (b.length >= 1) load = Math.round(b[0] * 100 / 255);
-    }
-
-    // Papillon — PID 0x11
-    const thrRaw = await send('11');
-    if (isValid(thrRaw, 1)) {
-      const b = dataBytes(thrRaw);
-      if (b.length >= 1) thr = Math.round(b[0] * 100 / 255);
-    }
-
-    // MAP — PID 0x0B
-    const mapRaw = await send('0B');
-    if (isValid(mapRaw, 1)) {
-      const b = dataBytes(mapRaw);
-      if (b.length >= 1) map = b[0];
-    }
-
-    // Temp admission — PID 0x0F — même filtre que temp eau
-    const intakeRaw = await send('0F');
-    if (isValid(intakeRaw, 1)) {
-      const b = dataBytes(intakeRaw);
-      if (b.length >= 1 && b[0] > 0) intake = b[0] - 40;
-    }
-
-    // O2 B1S1 — PID 0x14
-    const o2Raw = await send('14');
-    if (isValid(o2Raw, 1)) {
-      const b = dataBytes(o2Raw);
-      if (b.length >= 1) o2 = b[0] * 0.005;
-    }
-
-    // Tension batterie — PID 0x42 — ((A*256)+B)/1000
-    const battRaw = await send('42');
-    if (isValid(battRaw, 2)) {
-      const b = dataBytes(battRaw);
-      if (b.length >= 2) {
-        const v = ((b[0] * 256) + b[1]) / 1000;
-        if (v > 6 && v < 20) battVolt = v; // sanity check
-      }
-    }
-
     // Temp huile — PID 0x5C (optionnel, souvent absent sur Golf 4 TDi)
+    let oil: number | null = null;
     try {
-      const oilRaw = await send('5C');
-      if (isValid(oilRaw, 1)) {
-        const b = dataBytes(oilRaw);
-        if (b.length >= 1 && b[0] > 0) oil = b[0] - 40;
-      }
+      oil = parseOil(await send('5C'));
     } catch (_) {}
 
     return {
-      rpm,
-      speed,
-      coolant: coolant ?? null,   // null = non disponible → HTML affiche '--'
-      load,
-      thr,
-      map,
-      intake: intake ?? null,
-      o2,
-      battVolt,
-      oil: oil ?? null,
+      rpm:      parseRpm(await send('0C')),
+      speed:    parseSpeed(await send('0D')),
+      coolant:  parseCoolant(await send('05')),
+      load:     parseLoad(await send('04')),
+      thr:      parseThrottle(await send('11')),
+      map:      parseMap(await send('0B')),
+      intake:   parseIntake(await send('0F')),
+      o2:       parseO2(await send('14')),
+      battVolt: parseBattVolt(await send('42')),
+      oil,
     };
   };
 
