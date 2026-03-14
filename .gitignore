@@ -1,3 +1,8 @@
+# Release signing — never commit keystores or credentials
+*.keystore
+!android/app/debug.keystore
+*.jks
+
 node_modules/
 android/app/build/
 android/build/
