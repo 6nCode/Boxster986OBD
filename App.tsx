@@ -59,6 +59,25 @@ export default function App() {
     );
   }, []);
 
+  const startLoop = useCallback((dev: BluetoothDevice) => {
+    stopLoop();
+    loopRef.current = setInterval(async () => {
+      try {
+        const data = await pollPIDs(dev);
+        errCount.current = 0;
+        post({type: 'LIVE_DATA', ...data});
+      } catch {
+        errCount.current++;
+        // Après 5 erreurs consécutives → connexion perdue
+        if (errCount.current >= 5) {
+          stopLoop();
+          devRef.current = null;
+          post({type: 'DISCONNECTED', unexpected: true});
+        }
+      }
+    }, 300);
+  }, [post]);
+
   const doScan = useCallback(async () => {
     try {
       const on = await RNBluetoothClassic.isBluetoothEnabled();
@@ -85,7 +104,7 @@ export default function App() {
       for (const cmd of initCmds) {
         await dev.write(cmd + '\r');
         await delay(cmd === 'ATZ' ? 1500 : 250);
-        try { await dev.read(); } catch (_) {}
+        try { await dev.read(); } catch {}
       }
       // Délai supplémentaire après init pour que l'ECU soit prêt
       await delay(500);
@@ -95,11 +114,11 @@ export default function App() {
     } catch (e: any) {
       post({type: 'CONNECT_ERROR', message: e.message ?? 'Connexion échouée'});
     }
-  }, [post]);
+  }, [post, startLoop]);
 
   const doDisconnect = useCallback(async () => {
     stopLoop();
-    try { await devRef.current?.disconnect(); } catch (_) {}
+    try { await devRef.current?.disconnect(); } catch {}
     devRef.current = null;
     post({type: 'DISCONNECTED', unexpected: false});
   }, [post]);
@@ -114,25 +133,6 @@ export default function App() {
     } catch (e: any) {
       post({type: 'CMD_ERROR', tag, message: e.message});
     }
-  }, [post]);
-
-  const startLoop = useCallback((dev: BluetoothDevice) => {
-    stopLoop();
-    loopRef.current = setInterval(async () => {
-      try {
-        const data = await pollPIDs(dev);
-        errCount.current = 0;
-        post({type: 'LIVE_DATA', ...data});
-      } catch (e) {
-        errCount.current++;
-        // Après 5 erreurs consécutives → connexion perdue
-        if (errCount.current >= 5) {
-          stopLoop();
-          devRef.current = null;
-          post({type: 'DISCONNECTED', unexpected: true});
-        }
-      }
-    }, 300);
   }, [post]);
 
   const stopLoop = () => {
@@ -157,7 +157,7 @@ export default function App() {
     let oil: number | null = null;
     try {
       oil = parseOil(await send('5C'));
-    } catch (_) {}
+    } catch {}
 
     return {
       rpm:      parseRpm(await send('0C')),
@@ -181,7 +181,7 @@ export default function App() {
         if (m.type === 'CONNECT')    doConnect(m.address);
         if (m.type === 'DISCONNECT') doDisconnect();
         if (m.type === 'SEND_CMD')   doCmd(m.cmd, m.tag);
-      } catch (_) {}
+      } catch {}
     },
     [doScan, doConnect, doDisconnect, doCmd],
   );

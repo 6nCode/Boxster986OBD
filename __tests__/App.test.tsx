@@ -9,11 +9,11 @@ import App from '../App';
 // ── mocks ──────────────────────────────────────────────────────────────────
 
 jest.mock('react-native-webview', () => {
-  const React = require('react');
+  const MockReact = require('react');
   const {View} = require('react-native');
-  const WebView = React.forwardRef(
+  const WebView = MockReact.forwardRef(
     (props: any, ref: any) => {
-      React.useImperativeHandle(ref, () => ({
+      MockReact.useImperativeHandle(ref, () => ({
         injectJavaScript: jest.fn(),
       }));
       return <View testID="webview" {...props} />;
