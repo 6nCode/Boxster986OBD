@@ -93,11 +93,12 @@ android {
             keyPassword 'android'
         }
         release {
-            if (project.hasProperty('BOXSTER_UPLOAD_STORE_FILE')) {
-                storeFile file(BOXSTER_UPLOAD_STORE_FILE)
-                storePassword BOXSTER_UPLOAD_STORE_PASSWORD
-                keyAlias BOXSTER_UPLOAD_KEY_ALIAS
-                keyPassword BOXSTER_UPLOAD_KEY_PASSWORD
+            def storeFileProp = System.getenv('BOXSTER_UPLOAD_STORE_FILE') ?: (project.hasProperty('BOXSTER_UPLOAD_STORE_FILE') ? BOXSTER_UPLOAD_STORE_FILE : null)
+            if (storeFileProp) {
+                storeFile file(storeFileProp)
+                storePassword System.getenv('BOXSTER_UPLOAD_STORE_PASSWORD') ?: BOXSTER_UPLOAD_STORE_PASSWORD
+                keyAlias System.getenv('BOXSTER_UPLOAD_KEY_ALIAS') ?: BOXSTER_UPLOAD_KEY_ALIAS
+                keyPassword System.getenv('BOXSTER_UPLOAD_KEY_PASSWORD') ?: BOXSTER_UPLOAD_KEY_PASSWORD
             }
         }
     }
