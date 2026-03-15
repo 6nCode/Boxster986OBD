@@ -8,3 +8,19 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+# React Native core
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class com.facebook.jni.** { *; }
+
+# React Native Bluetooth Classic
+-keep class com.kenjdavidson.bluetoothclassic.** { *; }
+
+# React Native WebView
+-keep class com.reactnativecommunity.webview.** { *; }
+
+# JavaScript interface annotations (WebView bridge)
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
