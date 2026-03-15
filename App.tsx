@@ -29,6 +29,36 @@ type WVMsg =
   | {type: 'DISCONNECT'}
   | {type: 'SEND_CMD'; cmd: string; tag: string};
 
+// Allowed OBD-II service 01 PIDs and ELM327 AT commands
+const ALLOWED_PIDS = new Set([
+  '0C','0D','05','04','11','0B','0F','14','42','5C',
+  '03','07','01','09','0A',
+]);
+const AT_CMD_RE = /^AT[A-Z0-9 ]{1,20}$/i;
+
+function isValidObdCmd(cmd: string): boolean {
+  const upper = cmd.trim().toUpperCase();
+  return ALLOWED_PIDS.has(upper) || AT_CMD_RE.test(upper);
+}
+
+function isValidWVMsg(m: unknown): m is WVMsg {
+  if (!m || typeof m !== 'object') return false;
+  const obj = m as Record<string, unknown>;
+  switch (obj.type) {
+    case 'SCAN':
+    case 'DISCONNECT':
+      return true;
+    case 'CONNECT':
+      return typeof obj.address === 'string' && obj.address.length > 0;
+    case 'SEND_CMD':
+      return typeof obj.cmd === 'string' &&
+             typeof obj.tag === 'string' &&
+             isValidObdCmd(obj.cmd);
+    default:
+      return false;
+  }
+}
+
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export default function App() {
@@ -125,6 +155,7 @@ export default function App() {
 
   const doCmd = useCallback(async (cmd: string, tag: string) => {
     if (!devRef.current) return;
+    if (!isValidObdCmd(cmd)) return;
     try {
       await devRef.current.write(cmd + '\r');
       await delay(400);
@@ -176,7 +207,9 @@ export default function App() {
   const onMsg = useCallback(
     (e: {nativeEvent: {data: string}}) => {
       try {
-        const m: WVMsg = JSON.parse(e.nativeEvent.data);
+        const raw: unknown = JSON.parse(e.nativeEvent.data);
+        if (!isValidWVMsg(raw)) return;
+        const m = raw;
         if (m.type === 'SCAN')       doScan();
         if (m.type === 'CONNECT')    doConnect(m.address);
         if (m.type === 'DISCONNECT') doDisconnect();
@@ -196,12 +229,10 @@ export default function App() {
         onMessage={onMsg}
         javaScriptEnabled
         domStorageEnabled
-        originWhitelist={['*']}
+        originWhitelist={['file://*']}
         scalesPageToFit={false}
         textZoom={100}
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
-        mixedContentMode="always"
+        mixedContentMode="never"
       />
     </View>
   );
