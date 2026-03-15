@@ -1,7 +1,19 @@
 # Release signing — never commit keystores or credentials
 *.keystore
-!android/app/debug.keystore
 *.jks
+
+# Firebase / Google services configs
+google-services.json
+GoogleService-Info.plist
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.p8
 
 node_modules/
 android/app/build/
