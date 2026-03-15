@@ -129,15 +129,15 @@ export default function App() {
       devRef.current = dev;
       errCount.current = 0;
 
-      // Init ELM327 — ISO 9141-2 / KWP2000
-      const initCmds = ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP4', 'ATST19'];
+      // Init ELM327 — auto protocol detection (ATSP0), works with KWP2000/ISO9141
+      const initCmds = ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP0', 'ATST64'];
       for (const cmd of initCmds) {
         await dev.write(cmd + '\r');
-        await delay(cmd === 'ATZ' ? 1500 : 250);
+        await delay(cmd === 'ATZ' ? 1500 : 300);
         try { await dev.read(); } catch {}
       }
       // Délai supplémentaire après init pour que l'ECU soit prêt
-      await delay(500);
+      await delay(1000);
 
       post({type: 'CONNECTED', name: dev.name ?? address});
       startLoop(dev);
@@ -179,7 +179,7 @@ export default function App() {
     // Envoie une commande et retourne la réponse nettoyée
     const send = async (cmd: string): Promise<string> => {
       await dev.write('01 ' + cmd + '\r');
-      await delay(100);
+      await delay(200);
       const raw = (await dev.read()) ?? '';
       return raw;
     };
