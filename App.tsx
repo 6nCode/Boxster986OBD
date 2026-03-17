@@ -64,7 +64,7 @@ const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 export default function App() {
   const wv       = useRef<WebView>(null);
   const devRef   = useRef<BluetoothDevice | null>(null);
-  const loopRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loopRef  = useRef<boolean>(false);
   const errCount = useRef(0);
 
   useEffect(() => {
@@ -91,21 +91,25 @@ export default function App() {
 
   const startLoop = useCallback((dev: BluetoothDevice) => {
     stopLoop();
-    loopRef.current = setInterval(async () => {
-      try {
-        const data = await pollPIDs(dev);
-        errCount.current = 0;
-        post({type: 'LIVE_DATA', ...data});
-      } catch {
-        errCount.current++;
-        // Après 5 erreurs consécutives → connexion perdue
-        if (errCount.current >= 5) {
-          stopLoop();
-          devRef.current = null;
-          post({type: 'DISCONNECTED', unexpected: true});
+    loopRef.current = true;
+    (async () => {
+      while (loopRef.current) {
+        try {
+          const data = await pollPIDs(dev);
+          errCount.current = 0;
+          post({type: 'LIVE_DATA', ...data});
+        } catch {
+          errCount.current++;
+          // Après 5 erreurs consécutives → connexion perdue
+          if (errCount.current >= 5) {
+            loopRef.current = false;
+            devRef.current = null;
+            post({type: 'DISCONNECTED', unexpected: true});
+            return;
+          }
         }
       }
-    }, 300);
+    })();
   }, [post]);
 
   const doScan = useCallback(async () => {
@@ -125,7 +129,7 @@ export default function App() {
   const doConnect = useCallback(async (address: string) => {
     try {
       post({type: 'CONNECTING'});
-      const dev = await RNBluetoothClassic.connectToDevice(address, {delimiter: '\r'});
+      const dev = await RNBluetoothClassic.connectToDevice(address, {delimiter: '>'});
       devRef.current = dev;
       errCount.current = 0;
 
@@ -133,8 +137,12 @@ export default function App() {
       const initCmds = ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP0', 'ATST64'];
       for (const cmd of initCmds) {
         await dev.write(cmd + '\r');
-        await delay(cmd === 'ATZ' ? 1500 : 300);
-        try { await dev.read(); } catch {}
+        const initDeadline = Date.now() + (cmd === 'ATZ' ? 2000 : 500);
+        while (Date.now() < initDeadline) {
+          const r = await dev.read();
+          if (r != null && r.includes('>')) break;
+          await delay(50);
+        }
       }
       // Délai supplémentaire après init pour que l'ECU soit prêt
       await delay(1000);
@@ -167,10 +175,7 @@ export default function App() {
   }, [post]);
 
   const stopLoop = () => {
-    if (loopRef.current) {
-      clearInterval(loopRef.current);
-      loopRef.current = null;
-    }
+    loopRef.current = false;
   };
 
   // ── Parser robuste ELM327 ──────────────────────────────────────────────
@@ -179,8 +184,15 @@ export default function App() {
     // Envoie une commande et retourne la réponse nettoyée
     const send = async (cmd: string): Promise<string> => {
       await dev.write('01 ' + cmd + '\r');
-      await delay(200);
-      const raw = (await dev.read()) ?? '';
+      // Poll until ELM327 sends the '>' prompt (max 2s)
+      let raw = '';
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline) {
+        const chunk = await dev.read();
+        if (chunk != null && chunk.trim().length > 0) { raw = chunk; break; }
+        await delay(30);
+      }
+      console.log('[OBD] 01 ' + cmd + ' → ' + JSON.stringify(raw));
       return raw;
     };
 
