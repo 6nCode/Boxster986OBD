@@ -10,14 +10,9 @@
  */
 
 import React, {useEffect, useRef, useCallback} from 'react';
-import {StyleSheet, View, PermissionsAndroid, Platform, StatusBar, Share} from 'react-native';
+import {StyleSheet, View, PermissionsAndroid, Platform, StatusBar} from 'react-native';
 import WebView from 'react-native-webview';
 import RNBluetoothClassic, {BluetoothDevice} from 'react-native-bluetooth-classic';
-import RNFS from 'react-native-fs';
-import {
-  parseRpm, parseSpeed, parseCoolant, parseLoad, parseThrottle,
-  parseMap, parseIntake, parseO2, parseBattVolt, parseOil,
-} from './obd';
 
 // HTML dans un fichier .js separe — Metro compile chaque fichier independamment
 // Evite les problemes de template literals imbriques et d'encodage
@@ -28,63 +23,22 @@ type WVMsg =
   | {type: 'SCAN'}
   | {type: 'CONNECT'; address: string}
   | {type: 'DISCONNECT'}
-  | {type: 'SEND_CMD'; cmd: string; tag: string}
-  | {type: 'EXPORT_LOGS'}
-  | {type: 'CLEAR_LOGS'};
-
-// Allowed OBD-II service 01 PIDs and ELM327 AT commands
-const ALLOWED_PIDS = new Set([
-  '0C','0D','05','04','11','0B','0F','14','42','5C',
-  '03','07','01','09','0A',
-]);
-const AT_CMD_RE = /^AT[A-Z0-9 ]{1,20}$/i;
-
-function isValidObdCmd(cmd: string): boolean {
-  const upper = cmd.trim().toUpperCase();
-  return ALLOWED_PIDS.has(upper) || AT_CMD_RE.test(upper);
-}
-
-function isValidWVMsg(m: unknown): m is WVMsg {
-  if (!m || typeof m !== 'object') return false;
-  const obj = m as Record<string, unknown>;
-  switch (obj.type) {
-    case 'SCAN':
-    case 'DISCONNECT':
-      return true;
-    case 'CONNECT':
-      return typeof obj.address === 'string' && obj.address.length > 0;
-    case 'SEND_CMD':
-      return typeof obj.cmd === 'string' &&
-             typeof obj.tag === 'string' &&
-             isValidObdCmd(obj.cmd);
-    case 'EXPORT_LOGS':
-    case 'CLEAR_LOGS':
-      return true;
-    default:
-      return false;
-  }
-}
+  | {type: 'SEND_CMD'; cmd: string; tag: string};
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-const LOG_PATH = RNFS.ExternalDirectoryPath + '/obd_log.txt';
-// Module-level hook so appendLog can send to WebView from outside component
-let _postToWV: ((payload: object) => void) | null = null;
-
-async function appendLog(line: string): Promise<void> {
-  try {
-    const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    const entry = `[${ts}] ${line}`;
-    await RNFS.appendFile(LOG_PATH, entry + '\n', 'utf8');
-    _postToWV?.({type: 'LOG_ENTRY', line: entry});
-  } catch {}
-}
 
 export default function App() {
   const wv       = useRef<WebView>(null);
   const devRef   = useRef<BluetoothDevice | null>(null);
-  const loopRef  = useRef<boolean>(false);
-  const errCount = useRef(0);
+  const loopRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const errCount  = useRef(0);
+  // Config runtime — modifiable depuis l'écran DIAG
+  const runtimeCfg = useRef({
+    pidDelay:   100,
+    interDelay: 50,
+    atzDelay:   1500,
+    protocol:   'ATSP4',
+  });
 
   useEffect(() => {
     (async () => {
@@ -108,36 +62,6 @@ export default function App() {
     );
   }, []);
 
-  useEffect(() => {
-    _postToWV = post;
-    return () => { _postToWV = null; };
-  }, [post]);
-
-  const startLoop = useCallback((dev: BluetoothDevice) => {
-    stopLoop();
-    loopRef.current = true;
-    (async () => {
-      while (loopRef.current) {
-        try {
-          const data = await pollPIDs(dev);
-          errCount.current = 0;
-          post({type: 'LIVE_DATA', ...data});
-        } catch (e: any) {
-          errCount.current++;
-          appendLog(`POLL_ERROR #${errCount.current} ${e?.message ?? 'unknown'}`);
-          // Après 5 erreurs consécutives → connexion perdue
-          if (errCount.current >= 5) {
-            appendLog('DISCONNECTED unexpected after 5 errors');
-            loopRef.current = false;
-            devRef.current = null;
-            post({type: 'DISCONNECTED', unexpected: true});
-            return;
-          }
-        }
-      }
-    })();
-  }, [post]);
-
   const doScan = useCallback(async () => {
     try {
       const on = await RNBluetoothClassic.isBluetoothEnabled();
@@ -155,66 +79,37 @@ export default function App() {
   const doConnect = useCallback(async (address: string) => {
     try {
       post({type: 'CONNECTING'});
-      appendLog(`CONNECT ${address}`);
-      const dev = await RNBluetoothClassic.connectToDevice(address, {delimiter: '>'});
+      const dev = await RNBluetoothClassic.connectToDevice(address, {delimiter: '\r'});
       devRef.current = dev;
       errCount.current = 0;
 
-      // Init ELM327 — auto protocol detection (ATSP0), works with KWP2000/ISO9141
-      const initCmds = ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP0', 'ATST64'];
+      // Init ELM327 — ISO 9141-2 / KWP2000
+      const cfg = runtimeCfg.current;
+      const initCmds = ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', cfg.protocol, 'ATST19'];
       for (const cmd of initCmds) {
         await dev.write(cmd + '\r');
-        const initDeadline = Date.now() + (cmd === 'ATZ' ? 2000 : 500);
-        let initResp = '';
-        while (Date.now() < initDeadline) {
-          const r = await dev.read();
-          if (r != null && r.includes('>')) { initResp = r.trim(); break; }
-          await delay(50);
-        }
-        appendLog(`INIT ${cmd} → ${initResp || 'timeout'}`);
+        await delay(cmd === 'ATZ' ? runtimeCfg.current.atzDelay : 250);
+        try { await dev.read(); } catch (_) {}
       }
       // Délai supplémentaire après init pour que l'ECU soit prêt
-      await delay(1000);
+      await delay(500);
 
-      appendLog(`CONNECTED name=${dev.name ?? address}`);
       post({type: 'CONNECTED', name: dev.name ?? address});
       startLoop(dev);
     } catch (e: any) {
-      appendLog(`CONNECT_ERROR ${e.message ?? 'unknown'}`);
       post({type: 'CONNECT_ERROR', message: e.message ?? 'Connexion échouée'});
     }
-  }, [post, startLoop]);
+  }, [post]);
 
   const doDisconnect = useCallback(async () => {
     stopLoop();
-    appendLog('DISCONNECT user-initiated');
-    try { await devRef.current?.disconnect(); } catch {}
+    try { await devRef.current?.disconnect(); } catch (_) {}
     devRef.current = null;
     post({type: 'DISCONNECTED', unexpected: false});
   }, [post]);
 
-  const doExportLogs = useCallback(async () => {
-    try {
-      const exists = await RNFS.exists(LOG_PATH);
-      if (!exists) { post({type: 'LOG_EXPORT_DONE', message: 'Aucun log disponible.'}); return; }
-      const content = await RNFS.readFile(LOG_PATH, 'utf8');
-      await Share.share({title: 'OBD Log', message: content});
-    } catch (e: any) {
-      post({type: 'LOG_EXPORT_DONE', message: e.message ?? 'Erreur export'});
-    }
-  }, [post]);
-
-  const doClearLogs = useCallback(async () => {
-    try {
-      const exists = await RNFS.exists(LOG_PATH);
-      if (exists) await RNFS.unlink(LOG_PATH);
-      post({type: 'LOG_CLEARED'});
-    } catch {}
-  }, [post]);
-
   const doCmd = useCallback(async (cmd: string, tag: string) => {
     if (!devRef.current) return;
-    if (!isValidObdCmd(cmd)) return;
     try {
       await devRef.current.write(cmd + '\r');
       await delay(400);
@@ -225,8 +120,30 @@ export default function App() {
     }
   }, [post]);
 
+  const startLoop = useCallback((dev: BluetoothDevice) => {
+    stopLoop();
+    loopRef.current = setInterval(async () => {
+      try {
+        const data = await pollPIDs(dev);
+        errCount.current = 0;
+        post({type: 'LIVE_DATA', ...data});
+      } catch (e) {
+        errCount.current++;
+        // Après 5 erreurs consécutives → connexion perdue
+        if (errCount.current >= 5) {
+          stopLoop();
+          devRef.current = null;
+          post({type: 'DISCONNECTED', unexpected: true});
+        }
+      }
+    }, 300);
+  }, [post]);
+
   const stopLoop = () => {
-    loopRef.current = false;
+    if (loopRef.current) {
+      clearInterval(loopRef.current);
+      loopRef.current = null;
+    }
   };
 
   // ── Parser robuste ELM327 ──────────────────────────────────────────────
@@ -235,54 +152,247 @@ export default function App() {
     // Envoie une commande et retourne la réponse nettoyée
     const send = async (cmd: string): Promise<string> => {
       await dev.write('01 ' + cmd + '\r');
-      // Poll until ELM327 sends the '>' prompt (max 2s)
-      let raw = '';
-      const deadline = Date.now() + 2000;
-      while (Date.now() < deadline) {
-        const chunk = await dev.read();
-        if (chunk != null && chunk.trim().length > 0) { raw = chunk; break; }
-        await delay(30);
-      }
-      console.log('[OBD] 01 ' + cmd + ' → ' + JSON.stringify(raw));
-      appendLog(`OBD 01 ${cmd} → ${raw.trim() || 'no response'}`);
+      await delay(runtimeCfg.current.pidDelay);
+      const raw = (await dev.read()) ?? '';
       return raw;
     };
 
+    // Valide la réponse : doit contenir au moins N octets hex utilisables
+    // Une réponse ELM327 valide ressemble à : "41 0C 1A F0\r" ou "410C1AF0"
+    const isValid = (raw: string, minBytes: number = 1): boolean => {
+      if (!raw) return false;
+      const upper = raw.toUpperCase();
+      // Rejeter toutes les erreurs ELM327
+      if (upper.includes('NO DATA')) return false;
+      if (upper.includes('UNABLE')) return false;
+      if (upper.includes('ERROR'))  return false;
+      if (upper.includes('STOPPED')) return false;
+      if (upper.includes('BUS'))    return false;
+      if (upper.includes('?'))      return false;
+      // Extraire les octets hex
+      const bytes = upper.replace(/[^0-9A-F]/g, '');
+      return bytes.length >= (minBytes + 2) * 2; // +2 pour les bytes d'en-tête (mode+PID)
+    };
+
+    // Extraire les octets de données (après les 2 bytes mode+PID)
+    const dataBytes = (raw: string): number[] => {
+      const hex = raw.toUpperCase().replace(/[^0-9A-F]/g, '');
+      // Sauter les 2 premiers bytes (ex: "410C" = mode 41, PID 0C)
+      const result: number[] = [];
+      for (let i = 4; i < hex.length; i += 2) {
+        const b = parseInt(hex.slice(i, i + 2), 16);
+        if (!isNaN(b)) result.push(b);
+      }
+      return result;
+    };
+
+    // Lire les PIDs un par un avec validation
+    let rpm = 0, speed = 0, coolant: number|null = null, load = 0;
+    let thr = 0, map = 0, intake: number|null = null, o2 = 0;
+    let battVolt = 0, oil: number|null = null;
+
+    // RPM = ((A*256)+B)/4 — PID 0x0C
+    const rpmRaw = await send('0C');
+    if (isValid(rpmRaw, 2)) {
+      const b = dataBytes(rpmRaw);
+      if (b.length >= 2) rpm = Math.round(((b[0] * 256) + b[1]) / 4);
+    }
+
+    // Vitesse — PID 0x0D
+    const speedRaw = await send('0D');
+    if (isValid(speedRaw, 1)) {
+      const b = dataBytes(speedRaw);
+      if (b.length >= 1) speed = b[0];
+    }
+
+    // Temp eau — PID 0x05 — A-40 (valeur brute 0 = -40°C → invalide)
+    const coolRaw = await send('05');
+    if (isValid(coolRaw, 1)) {
+      const b = dataBytes(coolRaw);
+      if (b.length >= 1 && b[0] > 0) coolant = b[0] - 40;
+    }
+
+    // Charge — PID 0x04
+    const loadRaw = await send('04');
+    if (isValid(loadRaw, 1)) {
+      const b = dataBytes(loadRaw);
+      if (b.length >= 1) load = Math.round(b[0] * 100 / 255);
+    }
+
+    // Papillon — PID 0x11
+    const thrRaw = await send('11');
+    if (isValid(thrRaw, 1)) {
+      const b = dataBytes(thrRaw);
+      if (b.length >= 1) thr = Math.round(b[0] * 100 / 255);
+    }
+
+    // MAP — PID 0x0B
+    const mapRaw = await send('0B');
+    if (isValid(mapRaw, 1)) {
+      const b = dataBytes(mapRaw);
+      if (b.length >= 1) map = b[0];
+    }
+
+    // Temp admission — PID 0x0F — même filtre que temp eau
+    const intakeRaw = await send('0F');
+    if (isValid(intakeRaw, 1)) {
+      const b = dataBytes(intakeRaw);
+      if (b.length >= 1 && b[0] > 0) intake = b[0] - 40;
+    }
+
+    // O2 B1S1 — PID 0x14
+    const o2Raw = await send('14');
+    if (isValid(o2Raw, 1)) {
+      const b = dataBytes(o2Raw);
+      if (b.length >= 1) o2 = b[0] * 0.005;
+    }
+
+    // Tension batterie — PID 0x42 — ((A*256)+B)/1000
+    const battRaw = await send('42');
+    if (isValid(battRaw, 2)) {
+      const b = dataBytes(battRaw);
+      if (b.length >= 2) {
+        const v = ((b[0] * 256) + b[1]) / 1000;
+        if (v > 6 && v < 20) battVolt = v; // sanity check
+      }
+    }
+
     // Temp huile — PID 0x5C (optionnel, souvent absent sur Golf 4 TDi)
-    let oil: number | null = null;
     try {
-      oil = parseOil(await send('5C'));
-    } catch {}
+      const oilRaw = await send('5C');
+      if (isValid(oilRaw, 1)) {
+        const b = dataBytes(oilRaw);
+        if (b.length >= 1 && b[0] > 0) oil = b[0] - 40;
+      }
+    } catch (_) {}
 
     return {
-      rpm:      parseRpm(await send('0C')),
-      speed:    parseSpeed(await send('0D')),
-      coolant:  parseCoolant(await send('05')),
-      load:     parseLoad(await send('04')),
-      thr:      parseThrottle(await send('11')),
-      map:      parseMap(await send('0B')),
-      intake:   parseIntake(await send('0F')),
-      o2:       parseO2(await send('14')),
-      battVolt: parseBattVolt(await send('42')),
-      oil,
+      rpm,
+      speed,
+      coolant: coolant ?? null,   // null = non disponible → HTML affiche '--'
+      load,
+      thr,
+      map,
+      intake: intake ?? null,
+      o2,
+      battVolt,
+      oil: oil ?? null,
     };
   };
+
+
+  // ── Diagnostic Vgate ──────────────────────────────────────────────────
+  const doDiagCmd = useCallback(async (cmd: string, delayMs: number, tag: string) => {
+    if (!devRef.current) return;
+    try {
+      const t0 = Date.now();
+      await devRef.current.write(cmd + '\r');
+      await delay(delayMs);
+      const r = await devRef.current.read();
+      post({type: 'DIAG_RESPONSE', data: r ?? '(vide)', duration: Date.now()-t0, tag});
+    } catch (e: any) {
+      post({type: 'DIAG_RESPONSE', data: 'ERROR: ' + e.message, duration: 0, tag});
+    }
+  }, [post]);
+
+  const doDiagInit = useCallback(async (protocol: string, atzDelay: number, pidDelay: number) => {
+    if (!devRef.current) return;
+    const cmds = ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP'+protocol, 'ATST19'];
+    for (const cmd of cmds) {
+      try {
+        await devRef.current.write(cmd + '\r');
+        const d = cmd === 'ATZ' ? atzDelay : pidDelay;
+        await delay(d);
+        const r = (await devRef.current.read()) ?? '';
+        const ok = !r.toUpperCase().includes('ERROR') && r.trim() !== '';
+        post({type: 'DIAG_INIT_STEP', cmd, response: r, ok});
+      } catch (e: any) {
+        post({type: 'DIAG_INIT_STEP', cmd, response: 'ERROR: '+e.message, ok: false});
+      }
+    }
+  }, [post]);
+
+  const doDiagTestPids = useCallback(async (
+    pids: Array<{cmd: string; name: string}>,
+    pidDelay: number,
+    interDelay: number,
+  ) => {
+    if (!devRef.current) return;
+    // Parser les bytes de réponse ELM327
+    const dataBytes = (raw: string): number[] => {
+      const hex = raw.toUpperCase().replace(/[^0-9A-F]/g, '');
+      const result: number[] = [];
+      for (let i = 4; i < hex.length; i += 2) {
+        const b = parseInt(hex.slice(i, i + 2), 16);
+        if (!isNaN(b)) result.push(b);
+      }
+      return result;
+    };
+    const parsers: Record<string, (b: number[]) => string|null> = {
+      '010C': b => b.length>=2 ? Math.round(((b[0]*256)+b[1])/4)+' tr/min' : null,
+      '010D': b => b.length>=1 ? b[0]+' km/h' : null,
+      '0105': b => b.length>=1 && b[0]>0 ? (b[0]-40)+'°C' : null,
+      '010B': b => b.length>=1 ? b[0]+' kPa' : null,
+      '0104': b => b.length>=1 ? Math.round(b[0]*100/255)+'%' : null,
+      '0111': b => b.length>=1 ? Math.round(b[0]*100/255)+'%' : null,
+      '010F': b => b.length>=1 && b[0]>0 ? (b[0]-40)+'°C' : null,
+      '0142': b => b.length>=2 ? (((b[0]*256)+b[1])/1000).toFixed(2)+'V' : null,
+      '0100': b => b.length>=4 ? '0x'+b.map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase() : null,
+    };
+    for (let i = 0; i < pids.length; i++) {
+      const p = pids[i];
+      const isLast = i === pids.length - 1;
+      try {
+        const t0 = Date.now();
+        await devRef.current.write(p.cmd + '\r');
+        await delay(pidDelay);
+        const raw = (await devRef.current.read()) ?? '';
+        const upper = raw.toUpperCase().replace(/\s/g, '');
+        const ok = !upper.includes('NODATA') && !upper.includes('ERROR')
+                && !upper.includes('UNABLE') && upper !== '' && upper !== '?';
+        const parsed = ok && parsers[p.cmd] ? parsers[p.cmd](dataBytes(raw)) : null;
+        post({type:'DIAG_PID_RESULT', cmd: p.cmd, name: p.name, raw, ok,
+              parsed: parsed ?? undefined, duration: Date.now()-t0, last: isLast});
+      } catch (e: any) {
+        post({type:'DIAG_PID_RESULT', cmd: p.cmd, name: p.name, raw: 'ERROR: '+e.message,
+              ok: false, last: isLast});
+      }
+      if (!isLast && interDelay > 0) await delay(interDelay);
+    }
+  }, [post]);
+
+  const doApplyConfig = useCallback((cfg: any) => {
+    runtimeCfg.current = {
+      pidDelay:   cfg.pidDelay   ?? 100,
+      interDelay: cfg.interDelay ?? 50,
+      atzDelay:   cfg.atzDelay   ?? 1500,
+      protocol:   cfg.protocol   ?? 'ATSP4',
+    };
+    post({type: 'DIAG_APPLY_ACK', config: runtimeCfg.current});
+  }, [post]);
+
+  const doSaveDiagConfigs = useCallback((data: any) => {
+    // Persistance native — stocker dans AsyncStorage si disponible
+    // Pour l'instant on confirme juste la réception
+    post({type: 'DIAG_CONFIGS_LOADED', data});
+  }, [post]);
 
   const onMsg = useCallback(
     (e: {nativeEvent: {data: string}}) => {
       try {
-        const raw: unknown = JSON.parse(e.nativeEvent.data);
-        if (!isValidWVMsg(raw)) return;
-        const m = raw;
-        if (m.type === 'SCAN')        doScan();
-        if (m.type === 'CONNECT')     doConnect(m.address);
-        if (m.type === 'DISCONNECT')  doDisconnect();
-        if (m.type === 'SEND_CMD')    doCmd(m.cmd, m.tag);
-        if (m.type === 'EXPORT_LOGS') doExportLogs();
-        if (m.type === 'CLEAR_LOGS')  doClearLogs();
-      } catch {}
+        const m: any = JSON.parse(e.nativeEvent.data);
+        if (m.type === 'SCAN')            doScan();
+        if (m.type === 'CONNECT')         doConnect(m.address);
+        if (m.type === 'DISCONNECT')      doDisconnect();
+        if (m.type === 'SEND_CMD')        doCmd(m.cmd, m.tag);
+        if (m.type === 'DIAG_CMD')        doDiagCmd(m.cmd, m.delay ?? 200, m.tag);
+        if (m.type === 'DIAG_INIT')       doDiagInit(m.protocol, m.atzDelay, m.pidDelay);
+        if (m.type === 'DIAG_TEST_PIDS')  doDiagTestPids(m.pids, m.pidDelay, m.interDelay);
+        if (m.type === 'APPLY_CONFIG')    doApplyConfig(m);
+        if (m.type === 'SAVE_DIAG_CONFIGS') doSaveDiagConfigs(m.data);
+      } catch (_) {}
     },
-    [doScan, doConnect, doDisconnect, doCmd, doExportLogs, doClearLogs],
+    [doScan, doConnect, doDisconnect, doCmd, doDiagCmd, doDiagInit, doDiagTestPids, doApplyConfig, doSaveDiagConfigs],
   );
 
   return (
@@ -295,10 +405,12 @@ export default function App() {
         onMessage={onMsg}
         javaScriptEnabled
         domStorageEnabled
-        originWhitelist={['file://*']}
+        originWhitelist={['*']}
         scalesPageToFit={false}
         textZoom={100}
-        mixedContentMode="never"
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
+        mixedContentMode="always"
       />
     </View>
   );
